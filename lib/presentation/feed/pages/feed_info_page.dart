@@ -18,6 +18,7 @@ import '../../../core/utils/feed_widgets_utils.dart';
 import '../../../core/utils/navigator/navigator.dart';
 import '../../../core/utils/navigator/navigator_observer_mixin.dart';
 import '../../../core/widgets/chuchu_cached_network_Image.dart';
+import '../../../core/widgets/chuchu_Loading.dart';
 import '../../../core/widgets/common_image.dart';
 import '../../../core/widgets/common_toast.dart';
 import '../../../data/enum/feed_enum.dart';
@@ -53,6 +54,7 @@ class _FeedInfoPageState extends State<FeedInfoPage>
   List<NotedUIModel?> replyList = [];
 
   bool scrollTag = false;
+  bool _isLiking = false; // Track like operation loading state
   
   NotedUIModel? _currentNotedUIModel;
 
@@ -137,8 +139,20 @@ class _FeedInfoPageState extends State<FeedInfoPage>
     final noteDB = _currentModel?.noteDB;
     if (noteDB == null) return;
 
-    // Prevent double tap
-    if (noteDB.reactionCountByMe > 0) return;
+    // Prevent double tap and loading state
+    if (_isLiking) return;
+    
+    // Check if already liked
+    if (noteDB.reactionCountByMe > 0) {
+      CommonToast.instance.show(context, 'You have already liked this post', toastType: ToastType.info);
+      return;
+    }
+
+    // Show loading
+    setState(() {
+      _isLiking = true;
+    });
+    ChuChuLoading.show();
 
     bool isSuccess = false;
     try {
@@ -149,6 +163,14 @@ class _FeedInfoPageState extends State<FeedInfoPage>
     } catch (e) {
       debugPrint('Error sending reaction: $e');
       isSuccess = false;
+    } finally {
+      // Hide loading
+      ChuChuLoading.dismiss();
+      if (mounted) {
+        setState(() {
+          _isLiking = false;
+        });
+      }
     }
 
     _dealWithReaction(isSuccess);
@@ -645,7 +667,7 @@ class _FeedInfoPageState extends State<FeedInfoPage>
                         iconName:
                             isLikeByMe ? 'liked_icon.png' : 'like_icon.png',
                         value: likeCount.toString(),
-                        onTap: _handleLikeTap,
+                        onTap: _isLiking ? null : _handleLikeTap,
                       ),
                       SizedBox(width: 16),
                       _buildEngagementItem(
