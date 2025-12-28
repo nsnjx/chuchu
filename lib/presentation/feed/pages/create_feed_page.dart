@@ -846,21 +846,35 @@ class _CreateFeedPageState extends State<CreateFeedPage>
         if (isUploaded)
           Positioned(
             bottom: 8,
-            left: 16,
+            left: 20,
             child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
               decoration: BoxDecoration(
-                color: Colors.green,
-                borderRadius: BorderRadius.circular(8),
+                color: Colors.black54,
+                borderRadius: BorderRadius.circular(12),
               ),
-              child: const Row(
+              child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.check, color: Colors.white, size: 12),
-                  SizedBox(width: 3),
+                  Container(
+                    width: 16,
+                    height: 16,
+                    decoration: BoxDecoration(
+                      color: kGreen,
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: Center(
+                      child: Icon(Icons.check, color: Colors.white, size: 12),
+                    ),
+                  ),
+                  const SizedBox(width: 6),
                   Text(
                     'Uploaded',
-                    style: TextStyle(color: Colors.white, fontSize: 10),
+                    style: GoogleFonts.inter(
+                      color: Colors.white,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w800,
+                    ),
                   ),
                 ],
               ),
