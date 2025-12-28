@@ -53,10 +53,16 @@ class _FeedInfoPageState extends State<FeedInfoPage>
   List<NotedUIModel?> replyList = [];
 
   bool scrollTag = false;
+  
+  NotedUIModel? _currentNotedUIModel;
+
+  NotedUIModel? get _currentModel => _currentNotedUIModel ?? widget.notedUIModel;
 
   @override
   void initState() {
     super.initState();
+    _currentNotedUIModel = widget.notedUIModel;
+    _updateNotedModel();
     _getReplyList();
   }
 
@@ -82,9 +88,27 @@ class _FeedInfoPageState extends State<FeedInfoPage>
     _updateNoted();
   }
 
-  void _updateNoted() async {
+  void _updateNotedModel() async {
     if (widget.notedUIModel == null) return;
-    NotedUIModel notedUIModel = widget.notedUIModel!;
+    String noteId = widget.notedUIModel!.noteDB.noteId;
+
+    NotedUIModel? noteNotifier =
+        await ChuChuFeedCacheManager.getValueNotifierNoted(
+          noteId,
+          isUpdateCache: true,
+          notedUIModel: widget.notedUIModel,
+        );
+
+    if (noteNotifier != null && mounted) {
+      setState(() {
+        _currentNotedUIModel = noteNotifier;
+      });
+    }
+  }
+
+  void _updateNoted() async {
+    if (_currentModel == null) return;
+    NotedUIModel notedUIModel = _currentModel!;
     String noteId = notedUIModel.noteDB.noteId;
 
     NotedUIModel? noteNotifier =
@@ -95,6 +119,14 @@ class _FeedInfoPageState extends State<FeedInfoPage>
         );
 
     if (noteNotifier == null) return;
+    
+    // Update current model
+    if (mounted) {
+      setState(() {
+        _currentNotedUIModel = noteNotifier;
+      });
+    }
+    
     int newReplyNum = noteNotifier.noteDB.replyEventIds?.length ?? 0;
     if (newReplyNum > replyList.length) {
       _getReplyList();
@@ -102,7 +134,7 @@ class _FeedInfoPageState extends State<FeedInfoPage>
   }
 
   Future<void> _handleLikeTap() async {
-    final noteDB = widget.notedUIModel?.noteDB;
+    final noteDB = _currentModel?.noteDB;
     if (noteDB == null) return;
 
     // Prevent double tap
@@ -132,14 +164,14 @@ class _FeedInfoPageState extends State<FeedInfoPage>
   }
 
   void _handleCommentTap() async {
-    if (widget.notedUIModel == null) return;
+    if (_currentModel == null) return;
 
     // Navigate to comment page
     final result = await Navigator.of(context).push(
       PageRouteBuilder(
         pageBuilder:
             (context, animation, secondaryAnimation) =>
-                FeedReplyPage(notedUIModel: widget.notedUIModel!),
+                FeedReplyPage(notedUIModel: _currentModel!),
         transitionsBuilder: (context, animation, secondaryAnimation, child) {
           const begin = Offset(0.0, 1.0);
           const end = Offset.zero;
@@ -160,11 +192,13 @@ class _FeedInfoPageState extends State<FeedInfoPage>
 
     if (result != null && result) {
       _updateNoted();
+      // Also update the model to get latest replyCountByMe
+      _updateNotedModel();
     }
   }
 
   void _handleZapTap() {
-    if (widget.notedUIModel == null) return;
+    if (_currentModel == null) return;
 
     // Show zap dialog
     showDialog(
@@ -178,7 +212,7 @@ class _FeedInfoPageState extends State<FeedInfoPage>
               Text('Send a zap to support this post?'),
               SizedBox(height: 16),
               Text(
-                'Current zap amount: \$${(widget.notedUIModel!.noteDB.zapAmount / 100000000.0).toStringAsFixed(2)}',
+                'Current zap amount: \$${(_currentModel!.noteDB.zapAmount / 100000000.0).toStringAsFixed(2)}',
                 style: TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.bold,
@@ -211,20 +245,20 @@ class _FeedInfoPageState extends State<FeedInfoPage>
   }
 
   void _updateNoteDB() async {
-    if (widget.notedUIModel == null) return;
+    if (_currentModel == null) return;
 
     try {
       NotedUIModel? noteNotifier =
           await ChuChuFeedCacheManager.getValueNotifierNoted(
-            widget.notedUIModel!.noteDB.noteId,
+            _currentModel!.noteDB.noteId,
             isUpdateCache: true,
-            notedUIModel: widget.notedUIModel,
+            notedUIModel: _currentModel,
           );
 
       if (noteNotifier != null && mounted) {
-        // Update the widget's notedUIModel if possible
-        // Note: This might need to be handled by parent widget
-        setState(() {});
+        setState(() {
+          _currentNotedUIModel = noteNotifier;
+        });
       }
     } catch (e) {
       debugPrint('Error updating note DB: $e');
@@ -237,8 +271,8 @@ class _FeedInfoPageState extends State<FeedInfoPage>
   }
 
   void _getReplyFromRelay() async {
-    if (widget.notedUIModel == null) return;
-    String notedId = widget.notedUIModel!.noteDB.noteId;
+    if (_currentModel == null) return;
+    String notedId = _currentModel!.noteDB.noteId;
     await Feed.sharedInstance.loadNoteActions(
       notedId,
       actionsCallBack: (result) async {
@@ -246,7 +280,7 @@ class _FeedInfoPageState extends State<FeedInfoPage>
             await ChuChuFeedCacheManager.getValueNotifierNoted(
               notedId,
               isUpdateCache: true,
-              notedUIModel: widget.notedUIModel,
+              notedUIModel: _currentModel,
             );
         if (noteNotifier == null) return;
         _getReplyFromDB();
@@ -255,8 +289,8 @@ class _FeedInfoPageState extends State<FeedInfoPage>
   }
 
   void _getReplyFromDB() async {
-    if (widget.notedUIModel == null) return;
-    String noteId = widget.notedUIModel!.noteDB.noteId;
+    if (_currentModel == null) return;
+    String noteId = _currentModel!.noteDB.noteId;
 
     NotedUIModel? preNoteNotifier =
         ChuChuFeedCacheManager.getValueNotifierNoteToCache(noteId);
@@ -312,7 +346,7 @@ class _FeedInfoPageState extends State<FeedInfoPage>
                 },
                 child: ValueListenableBuilder<UserDBISAR>(
                   valueListenable: Account.sharedInstance.getUserNotifier(
-                    widget.notedUIModel!.noteDB.author,
+                    _currentModel?.noteDB.author ?? '',
                   ),
                   builder: (context, value, child) {
                     return FeedWidgetsUtils.clipImage(
@@ -338,7 +372,7 @@ class _FeedInfoPageState extends State<FeedInfoPage>
                 child: ValueListenableBuilder<RelayGroupDBISAR>(
                   valueListenable: RelayGroup.sharedInstance
                       .getRelayGroupNotifier(
-                        widget.notedUIModel!.noteDB.author,
+                        _currentModel?.noteDB.author ?? '',
                       ),
                   builder: (context, value, child) {
                     return Text(
@@ -396,7 +430,7 @@ class _FeedInfoPageState extends State<FeedInfoPage>
                           child: Container(
                             key: _containerKey,
                             child: MomentRootNotedWidget(
-                              notedUIModel: widget.notedUIModel,
+                              notedUIModel: _currentModel,
                               isShowReply: widget.isShowReply,
                             ),
                           ),
@@ -405,7 +439,7 @@ class _FeedInfoPageState extends State<FeedInfoPage>
                       FeedWidget(
                         isShowAllContent: true,
                         isShowReply: false,
-                        notedUIModel: widget.notedUIModel,
+                        notedUIModel: _currentModel,
                         isShowBottomBorder: false,
                         feedWidgetLayout: EFeedWidgetLayout.fullScreen,
                         isShowOption: false,
@@ -464,12 +498,12 @@ class _FeedInfoPageState extends State<FeedInfoPage>
           }
           int index = replyList.indexOf(notedUIModelDraft);
           NoteDBISAR? draftModel = notedUIModelDraft.noteDB;
-          NoteDBISAR? widgetModel = widget.notedUIModel?.noteDB;
+          NoteDBISAR? currentModelDB = _currentModel?.noteDB;
 
-          if (draftModel.noteId == widgetModel?.noteId && index != 0) {
+          if (draftModel.noteId == currentModelDB?.noteId && index != 0) {
             return const SizedBox();
           }
-          if (!draftModel.isFirstLevelReply(widgetModel?.noteId)) {
+          if (!draftModel.isFirstLevelReply(currentModelDB?.noteId)) {
             return const SizedBox();
           }
           return MomentReplyWrapWidget(
@@ -543,17 +577,17 @@ class _FeedInfoPageState extends State<FeedInfoPage>
   }
 
   Widget _buildBottomActionBar() {
-    if (widget.notedUIModel == null) return const SizedBox();
+    if (_currentModel == null) return const SizedBox();
 
-    final noteDB = widget.notedUIModel!.noteDB;
+    final noteDB = _currentModel!.noteDB;
     final likeCount = noteDB.reactionCount;
     final commentCount = noteDB.replyCount;
     final zapAmount = noteDB.zapAmount / 100000000.0; // Convert sats to BTC
 
     final mediaQuery = MediaQuery.of(context);
     final bottomInset = mediaQuery.padding.bottom;
-    bool isLikeByMe = widget.notedUIModel!.noteDB.reactionCountByMe > 0;
-    bool isReplyByMe = widget.notedUIModel!.noteDB.replyCountByMe > 0;
+    bool isLikeByMe = noteDB.reactionCountByMe > 0;
+    bool isReplyByMe = noteDB.replyCountByMe > 0;
 
     return Positioned(
       bottom: 0,
@@ -616,7 +650,7 @@ class _FeedInfoPageState extends State<FeedInfoPage>
                       SizedBox(width: 16),
                       _buildEngagementItem(
                         type: EFeedOptionType.reply,
-                        isSelect: isLikeByMe,
+                        isSelect: isReplyByMe,
                         iconName: isReplyByMe ? 'replyed_icon.png' : 'reply_icon.png',
                         value: commentCount.toString(),
                         onTap: _handleCommentTap,
