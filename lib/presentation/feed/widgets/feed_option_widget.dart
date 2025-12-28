@@ -1,6 +1,7 @@
 import 'package:chuchu/core/feed/feed+load.dart';
 import 'package:chuchu/core/relayGroups/relayGroup+note.dart';
 import 'package:chuchu/core/widgets/common_image.dart';
+import 'package:chuchu/core/widgets/chuchu_Loading.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart' show GoogleFonts;
 
@@ -27,6 +28,7 @@ class FeedOptionWidget extends StatefulWidget {
 
 class _FeedOptionWidgetState extends State<FeedOptionWidget> {
   bool _reactionTag = false;
+  bool _isLiking = false; // Track like operation loading state
 
   late NotedUIModel? notedUIModel;
 
@@ -152,15 +154,36 @@ class _FeedOptionWidgetState extends State<FeedOptionWidget> {
         };
       case EFeedOptionType.like:
         return () async {
-          if (noteDB.reactionCountByMe > 0 || _reactionTag) return;
+          // Prevent loading state
+          if (_isLiking) return;
+          
+          // Check if already liked
+          if (noteDB.reactionCountByMe > 0 || _reactionTag) {
+            CommonToast.instance.show(context, 'You have already liked this post', toastType: ToastType.info);
+            return;
+          }
+          
+          // Show loading
+          setState(() {
+            _isLiking = true;
+          });
+          ChuChuLoading.show();
+          
           bool isSuccess = false;
           try {
-
             OKEvent event = await RelayGroup.sharedInstance.sendGroupNoteReaction(noteDB.noteId);
             isSuccess = event.status;
           } catch (e) {
             debugPrint('Error sending reaction: $e');
             isSuccess = false;
+          } finally {
+            // Hide loading
+            ChuChuLoading.dismiss();
+            if (mounted) {
+              setState(() {
+                _isLiking = false;
+              });
+            }
           }
           _dealWithReaction(isSuccess);
         };
@@ -174,8 +197,12 @@ class _FeedOptionWidgetState extends State<FeedOptionWidget> {
 
   void _dealWithReaction(bool isSuccess){
     if (isSuccess) {
-      _reactionTag = true;
-      setState(() {});
+      // Only update state after loading is dismissed
+      if (mounted) {
+        setState(() {
+          _reactionTag = true;
+        });
+      }
       _updateNoteDB();
       CommonToast.instance.show(context, 'Like success tips',toastType:ToastType.success);
     }else{
@@ -299,6 +326,8 @@ class _FeedOptionWidgetState extends State<FeedOptionWidget> {
     if(noteDB == null) return false;
     switch(type){
       case EFeedOptionType.like:
+        // Don't show as liked during loading
+        if (_isLiking) return false;
         return _reactionTag ? _reactionTag : noteDB.reactionCountByMe > 0;
       case EFeedOptionType.zaps:
         return noteDB.zapAmountByMe > 0;
@@ -344,6 +373,7 @@ class ReusableLikeButton extends StatefulWidget {
 
 class _ReusableLikeButtonState extends State<ReusableLikeButton> {
   bool _reactionTag = false;
+  bool _isLiking = false; // Track like operation loading state
 
   @override
   void initState() {
@@ -390,6 +420,8 @@ class _ReusableLikeButtonState extends State<ReusableLikeButton> {
   bool _isLiked() {
     final noteDB = widget.notedUIModel?.noteDB;
     if (noteDB == null) return false;
+    // Don't show as liked during loading
+    if (_isLiking) return false;
     return _reactionTag || noteDB.reactionCountByMe > 0;
   }
 
@@ -402,8 +434,20 @@ class _ReusableLikeButtonState extends State<ReusableLikeButton> {
     final noteDB = widget.notedUIModel?.noteDB;
     if (noteDB == null) return;
 
-    // Prevent double tap
-    if (noteDB.reactionCountByMe > 0 || _reactionTag) return;
+    // Prevent loading state
+    if (_isLiking) return;
+
+    // Check if already liked
+    if (noteDB.reactionCountByMe > 0 || _reactionTag) {
+      CommonToast.instance.show(context, 'You have already liked this post', toastType: ToastType.info);
+      return;
+    }
+
+    // Show loading
+    setState(() {
+      _isLiking = true;
+    });
+    ChuChuLoading.show();
 
     bool isSuccess = false;
     try {
@@ -412,6 +456,14 @@ class _ReusableLikeButtonState extends State<ReusableLikeButton> {
     } catch (e) {
       debugPrint('Error sending reaction: $e');
       isSuccess = false;
+    } finally {
+      // Hide loading
+      ChuChuLoading.dismiss();
+      if (mounted) {
+        setState(() {
+          _isLiking = false;
+        });
+      }
     }
 
     _dealWithReaction(isSuccess);
@@ -419,9 +471,12 @@ class _ReusableLikeButtonState extends State<ReusableLikeButton> {
 
   void _dealWithReaction(bool isSuccess) {
     if (isSuccess) {
-      setState(() {
-        _reactionTag = true;
-      });
+      // Only update state after loading is dismissed
+      if (mounted) {
+        setState(() {
+          _reactionTag = true;
+        });
+      }
       _updateNoteDB();
       CommonToast.instance.show(context, 'Like success tips',toastType:ToastType.success);
     } else {
