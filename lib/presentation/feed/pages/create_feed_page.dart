@@ -6,7 +6,7 @@ import 'package:chuchu/core/widgets/common_image.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:nostr_core_dart/nostr.dart';
 import 'package:chuchu/core/relayGroups/relayGroup+note.dart';
-import 'package:chuchu/core/services/blossom_uploader.dart';
+import 'package:chuchu/core/services/blossom_server_manager.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_image_compress/flutter_image_compress.dart';
@@ -362,12 +362,13 @@ class _CreateFeedPageState extends State<CreateFeedPage>
             fileName = uploadFilePath.split('/').last;
           }
 
-          final imageUrl = await BolssomUploader.upload(
-            'https://blossom.band',
-            uploadFilePath,
+          final imageUrl = await BlossomServerManager.shared.uploadWithAutoSwitch(
+            filePath: uploadFilePath,
             fileName: fileName,
+            onProgress: (progress) {
+            },
           );
-          if (imageUrl != null) {
+          if (imageUrl != null && imageUrl.isNotEmpty) {
             if (mounted) {
               setState(() {
                 _uploadedImageUrls.add(imageUrl);
@@ -375,7 +376,7 @@ class _CreateFeedPageState extends State<CreateFeedPage>
               });
             }
           } else {
-            throw Exception('Upload returned empty URL');
+            throw Exception('All Blossom servers failed to upload');
           }
         } catch (e) {
           if (mounted) {

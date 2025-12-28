@@ -10,7 +10,7 @@ import 'package:uuid/uuid.dart';
 
 import '../utils/aes_encrypt_utils.dart';
 import '../widgets/chuchu_Loading.dart';
-import 'blossom_uploader.dart';
+import 'blossom_server_manager.dart';
 import 'file_type.dart';
 
 class UploadUtils {
@@ -61,8 +61,16 @@ class UploadUtils {
     String? url = '';
     if (showLoading) ChuChuLoading.show();
     try {
-      url = await BolssomUploader.upload(null,uploadFile.path, fileName: filename, onProgress: onProgress);
+      url = await BlossomServerManager.shared.uploadWithAutoSwitch(
+        filePath: uploadFile.path,
+        fileName: filename,
+        onProgress: onProgress,
+      );
       if (showLoading) ChuChuLoading.dismiss();
+      
+      if (url == null || url.isEmpty) {
+        return UploadResult.error('All Blossom servers failed to upload');
+      }
     } catch (e, s) {
       if (showLoading) ChuChuLoading.dismiss();
       return UploadExceptionHandler.handleException(e, s);
@@ -72,7 +80,7 @@ class UploadUtils {
       encryptedFile.delete();
     }
 
-    return UploadResult.success(url!, encryptedKey, encryptedNonce);
+    return UploadResult.success(url, encryptedKey, encryptedNonce);
   }
 
 }
