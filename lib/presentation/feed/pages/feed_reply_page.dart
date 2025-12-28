@@ -13,9 +13,7 @@ import 'package:flutter_image_compress/flutter_image_compress.dart';
 import 'package:path/path.dart' as Path;
 import 'package:video_thumbnail/video_thumbnail.dart';
 import '../../../core/relayGroups/model/relayGroupDB_isar.dart';
-import '../../../core/services/blossom_uploader.dart';
-import '../../../core/services/file_type.dart';
-import '../../../core/services/upload_utils.dart';
+import '../../../core/services/blossom_server_manager.dart';
 
 import '../../../core/account/account.dart';
 import '../../../core/account/model/userDB_isar.dart';
@@ -63,6 +61,20 @@ class _FeedReplyPageState extends State<FeedReplyPage>
   final Map<int, Uint8List?> _videoThumbnails = {}; // Store video thumbnails
   bool _isUploading = false; // Track overall upload status
 
+  bool _isAnyUploading() {
+    for (int i = 0; i < _selectedImages.length; i++) {
+      if (_uploadingStatus[i] == true) {
+        return true;
+      }
+    }
+    for (int i = 0; i < _selectedVideos.length; i++) {
+      if (_videoUploadingStatus[i] == true) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   @override
   Widget buildBody(BuildContext context) {
     final theme = Theme.of(context);
@@ -92,11 +104,16 @@ class _FeedReplyPageState extends State<FeedReplyPage>
             child: Material(
               color: Colors.transparent,
               child: InkWell(
-                onTap: _postMoment,
+                onTap: _isAnyUploading() ? null : _postMoment,
                 borderRadius: BorderRadius.circular(20),
                 child: Container(
                   decoration: BoxDecoration(
-                    gradient: getBrandGradientHorizontal(),
+                    gradient:
+                        _isAnyUploading() ? null : getBrandGradientHorizontal(),
+                    color:
+                        _isAnyUploading()
+                            ? theme.colorScheme.outline.withOpacity(0.3)
+                            : null,
                     borderRadius: BorderRadius.circular(20),
                   ),
                   padding: const EdgeInsets.symmetric(
@@ -108,7 +125,10 @@ class _FeedReplyPageState extends State<FeedReplyPage>
                     style: GoogleFonts.inter(
                       fontSize: 16,
                       fontWeight: FontWeight.w600,
-                      color: Colors.white,
+                      color:
+                          _isAnyUploading()
+                              ? theme.colorScheme.onSurface.withOpacity(0.5)
+                              : Colors.white,
                     ),
                   ),
                 ),
@@ -557,8 +577,10 @@ class _FeedReplyPageState extends State<FeedReplyPage>
           });
         }
       }
-      // auto upload
-      _uploadNewImages();
+      // Wait for the next frame to ensure state is updated before uploading
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _uploadNewImages();
+      });
     } catch (e) {
       debugPrint('pick medias error: $e');
     }
@@ -567,6 +589,7 @@ class _FeedReplyPageState extends State<FeedReplyPage>
   void _removeImage(int index) {
     if (index < 0 || index >= _selectedImages.length) return;
     setState(() {
+      final wasUploading = _uploadingStatus[index] == true;
       _selectedImages.removeAt(index);
       if (index < _uploadedImageUrls.length) {
         _uploadedImageUrls.removeAt(index);
@@ -579,6 +602,10 @@ class _FeedReplyPageState extends State<FeedReplyPage>
       _uploadingStatus
         ..clear()
         ..addAll(newStatus);
+      // If we removed an uploading image and no other images are uploading, update _isUploading flag
+      if (wasUploading && !_isAnyUploading()) {
+        _isUploading = false;
+      }
     });
     if (_selectedImages.length == 1) {
       _computeAspectRatio(_selectedImages.first).then((ratio) {
@@ -694,8 +721,10 @@ class _FeedReplyPageState extends State<FeedReplyPage>
           _generateVideoThumbnail(videoFile, index);
         });
 
-        // Auto-upload newly selected video
-        _uploadNewVideos();
+        // Wait for the next frame to ensure state is updated before uploading
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          _uploadNewVideos();
+        });
       }
     } catch (e) {
       debugPrint('pick video error: $e');
@@ -705,6 +734,7 @@ class _FeedReplyPageState extends State<FeedReplyPage>
   void _removeVideo(int index) {
     if (index < 0 || index >= _selectedVideos.length) return;
     setState(() {
+      final wasUploading = _videoUploadingStatus[index] == true;
       _selectedVideos.removeAt(index);
       // Remove corresponding upload status, URL and thumbnail
       _videoUploadingStatus.remove(index);
@@ -733,6 +763,10 @@ class _FeedReplyPageState extends State<FeedReplyPage>
       _videoThumbnails.clear();
       _videoUploadingStatus.addAll(newStatus);
       _videoThumbnails.addAll(newThumbnails);
+      // If we removed an uploading video and no other videos are uploading, update _isUploading flag
+      if (wasUploading && !_isAnyUploading()) {
+        _isUploading = false;
+      }
     });
   }
 
@@ -784,24 +818,28 @@ class _FeedReplyPageState extends State<FeedReplyPage>
           String fileName =
               '$currentTime${Path.basenameWithoutExtension(file.path)}.mp4';
 
-          UploadResult result = await UploadUtils.uploadFile(
-            context: context,
-            fileType: FileType.video,
-            file:
-                file
-                    as dynamic, // Type cast for conditional import compatibility
-            filename: fileName,
+          final url = await BlossomServerManager.shared.uploadWithAutoSwitch(
+            filePath: file.path,
+            fileName: fileName,
+            onProgress: (progress) {
+              // Optional: update UI with progress
+            },
           );
 
-          if (result.isSuccess && result.url.isNotEmpty) {
-            if (mounted) {
-              setState(() {
-                _uploadedVideoUrls.add(result.url);
-                _videoUploadingStatus[i] = false; // Upload completed
-              });
-            }
-          } else {
-            throw Exception('Upload failed: ${result.errorMsg}');
+          if (url != null && url.isNotEmpty && mounted) {
+            setState(() {
+              _uploadedVideoUrls.add(url);
+              _videoUploadingStatus[i] = false; // Upload completed
+            });
+          } else if (mounted) {
+            setState(() {
+              _videoUploadingStatus[i] = false; // Reset upload status
+            });
+            CommonToast.instance.show(
+              context,
+              'Video ${i + 1} upload failed',
+              toastType: ToastType.failed,
+            );
           }
         } catch (e) {
           if (mounted) {
@@ -811,7 +849,7 @@ class _FeedReplyPageState extends State<FeedReplyPage>
             CommonToast.instance.show(
               context,
               'Video ${i + 1} upload failed: $e',
-                toastType:ToastType.failed
+              toastType: ToastType.failed,
             );
           }
         }
@@ -889,19 +927,33 @@ class _FeedReplyPageState extends State<FeedReplyPage>
               bottom: 8,
               left: 12,
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
-                  color: Colors.green,
-                  borderRadius: BorderRadius.circular(8),
+                  color: Colors.black54,
+                  borderRadius: BorderRadius.circular(12),
                 ),
-                child: const Row(
+                child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(Icons.check, color: Colors.white, size: 12),
-                    SizedBox(width: 3),
+                    Container(
+                      width: 16,
+                      height: 16,
+                      decoration: BoxDecoration(
+                        color: kGreen,
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child: Center(
+                        child: Icon(Icons.check, color: Colors.white, size: 12),
+                      ),
+                    ),
+                    const SizedBox(width: 6),
                     Text(
                       'Uploaded',
-                      style: TextStyle(color: Colors.white, fontSize: 10),
+                      style: GoogleFonts.inter(
+                        color: Colors.white,
+                        fontSize: 10,
+                        fontWeight: FontWeight.w800,
+                      ),
                     ),
                   ],
                 ),
@@ -1097,19 +1149,33 @@ class _FeedReplyPageState extends State<FeedReplyPage>
             bottom: 8,
             left: 16,
             child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
               decoration: BoxDecoration(
-                color: Colors.green,
-                borderRadius: BorderRadius.circular(8),
+                color: Colors.black54,
+                borderRadius: BorderRadius.circular(12),
               ),
-              child: const Row(
+              child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.check, color: Colors.white, size: 12),
-                  SizedBox(width: 3),
+                  Container(
+                    width: 16,
+                    height: 16,
+                    decoration: BoxDecoration(
+                      color: kGreen,
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: Center(
+                      child: Icon(Icons.check, color: Colors.white, size: 12),
+                    ),
+                  ),
+                  const SizedBox(width: 6),
                   Text(
                     'Uploaded',
-                    style: TextStyle(color: Colors.white, fontSize: 10),
+                    style: GoogleFonts.inter(
+                      color: Colors.white,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w800,
+                    ),
                   ),
                 ],
               ),
@@ -1249,35 +1315,64 @@ class _FeedReplyPageState extends State<FeedReplyPage>
   }
 
   Future<void> _uploadNewImages() async {
-    for (int i = _uploadedImageUrls.length; i < _selectedImages.length; i++) {
-      if (!mounted) return;
-      setState(() {
+    if (_isUploading) return;
+
+    setState(() {
+      _isUploading = true;
+      // Set upload status to true for all images that need to be uploaded
+      for (int i = _uploadedImageUrls.length; i < _selectedImages.length; i++) {
         _uploadingStatus[i] = true;
-      });
-      final original = _selectedImages[i];
-      final processed = await _removeExifWithCompress(original);
-      final filePath = (processed ?? original).path;
-      try {
-        final url = await BolssomUploader.upload(
-          'https://blossom.band',
-          filePath,
-          fileName: Path.basename(filePath),
-        );
-        if (url != null && mounted) {
-          setState(() {
-            _uploadedImageUrls.add(url);
-            _uploadingStatus[i] = false;
-          });
-        } else if (mounted) {
-          setState(() {
-            _uploadingStatus[i] = false;
-          });
+      }
+    });
+
+    try {
+      // Upload images that haven't been uploaded yet
+      for (int i = _uploadedImageUrls.length; i < _selectedImages.length; i++) {
+        if (!mounted) return;
+        final original = _selectedImages[i];
+        final processed = await _removeExifWithCompress(original);
+        final filePath = (processed ?? original).path;
+        try {
+          final url = await BlossomServerManager.shared.uploadWithAutoSwitch(
+            filePath: filePath,
+            fileName: Path.basename(filePath),
+            onProgress: (progress) {
+              // Optional: update UI with progress
+            },
+          );
+          if (url != null && url.isNotEmpty && mounted) {
+            setState(() {
+              _uploadedImageUrls.add(url);
+              _uploadingStatus[i] = false;
+            });
+          } else if (mounted) {
+            setState(() {
+              _uploadingStatus[i] = false;
+            });
+            CommonToast.instance.show(
+              context,
+              'Image ${i + 1} upload failed',
+              toastType: ToastType.failed,
+            );
+          }
+        } catch (e) {
+          if (mounted) {
+            setState(() {
+              _uploadingStatus[i] = false;
+            });
+            CommonToast.instance.show(
+              context,
+              'Image ${i + 1} upload failed: $e',
+              toastType: ToastType.failed,
+            );
+          }
         }
-      } catch (e) {
-        if (mounted)
-          setState(() {
-            _uploadingStatus[i] = false;
-          });
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isUploading = false;
+        });
       }
     }
   }
