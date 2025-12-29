@@ -221,20 +221,47 @@ class _FeedVideoWidgetState extends State<FeedVideoWidget> {
               ),
             
             // Play button
-            CommonImage(
-              iconName: 'play_feed_icon.png',
-              size: 60.0.px,
-              color: Colors.white,
-            ),
+            videoPlayIcon(),
           ],
         ),
       ),
     );
   }
 
-  Widget _getPicWidget() {
+  Widget videoPlayIcon (){
     if (_thumbnailFile == null) return const SizedBox();
 
+    return CommonImage(
+      iconName: 'play_feed_icon.png',
+      size: 60.0.px,
+      color: Colors.white,
+    );
+  }
+
+  Widget _getPicWidget() {
+    if (_thumbnailFile == null) return errorVideoWidget();
+
+    return Container(
+      width: double.infinity,
+      // height: 154.px, // Remove fixed height to allow adaptive height
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(Adapt.px(12)),
+        child: Image.file(
+          _thumbnailFile!,
+          width: double.infinity,
+          // height: double.infinity, // Remove fixed height to allow image to scale proportionally
+          fit: BoxFit.cover,
+          cacheWidth: 420, // 2x for high DPI displays
+          cacheHeight: 308,
+          errorBuilder: (context, error, stackTrace) {
+            return errorVideoWidget();
+          },
+        ),
+      ),
+    );
+  }
+
+  Widget errorVideoWidget(){
     return Container(
       width: double.infinity,
       height: 200,

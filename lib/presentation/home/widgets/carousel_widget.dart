@@ -1,6 +1,7 @@
 import 'package:chuchu/core/utils/widget_tool_utils.dart';
 import 'package:flutter/material.dart';
 import 'package:chuchu/core/utils/adapt.dart';
+import 'package:google_fonts/google_fonts.dart';
 import '../../../core/theme/app_theme.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'image_viewer_page.dart';
@@ -53,31 +54,38 @@ class _CarouselWidgetState extends State<CarouselWidget> {
     if (_imageLoadErrors[index] == true) {
       // Show retry button
       return Container(
+        color: Color(0xFFC8DBEF).withOpacity(0.2),
         child: Center(
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(
-                Icons.broken_image,
-                color: Colors.white.withOpacity(0.7),
-                size: 48,
-              ),
-              SizedBox(height: 16),
-              Text(
-                'Image Load Failed',
-                style: TextStyle(
-                  color: Colors.white.withOpacity(0.9),
-                  fontSize: 16,
+              Container(
+                padding: EdgeInsets.all(18),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.2),
+                      blurRadius: 2,
+                      offset: Offset(0, 1),
+                    ),
+                  ],
+                ),
+                child: Image.asset(
+                  'assets/images/image_error_icon.png',
+                  width: 28,
+                  height: 28,
                 ),
               ),
+
               SizedBox(height: 8),
-              ElevatedButton(
-                onPressed: () => _retryImageLoad(index),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.white.withOpacity(0.2),
-                  foregroundColor: Colors.white,
+              Text(
+                'Failed to load image',
+                style: GoogleFonts.inter(
+                  fontWeight: FontWeight.w600,
+                  color: Theme.of(context).colorScheme.outline,
                 ),
-                child: Text('Retry'),
               ),
             ],
           ),
@@ -128,7 +136,6 @@ class _CarouselWidgetState extends State<CarouselWidget> {
       children: [
         // Carousel content
         Container(
-          margin: EdgeInsets.only(left: 8,right: 12),
           height: 300,
           child: Stack(
             children: [
@@ -148,18 +155,8 @@ class _CarouselWidgetState extends State<CarouselWidget> {
                         );
                       },
                       child: Container(
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(6),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withOpacity(0.1),
-                              blurRadius: 8,
-                              offset: Offset(0, 2),
-                            ),
-                          ],
-                        ),
                         child: ClipRRect(
-                          borderRadius: BorderRadius.circular(6),
+                          borderRadius: BorderRadius.circular(12),
                           child: Stack(
                             children: [
                               // Background image
@@ -168,23 +165,6 @@ class _CarouselWidgetState extends State<CarouselWidget> {
                                   child: _buildImageWidget(imageUrl, index),
                                 ),
                               ),
-                              
-                              // Content overlay
-                              Positioned.fill(
-                                child: Container(
-                                  decoration: BoxDecoration(
-                                    gradient: LinearGradient(
-                                      begin: Alignment.topCenter,
-                                      end: Alignment.bottomCenter,
-                                      colors: [
-                                        Colors.transparent,
-                                        Colors.black.withOpacity(0.3),
-                                      ],
-                                    ),
-                                  ),
-                                ),
-                              ),
-                              
                               // Image counter
                               Positioned(
                                 bottom: 16,
