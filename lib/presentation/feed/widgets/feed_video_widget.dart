@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:chuchu/core/utils/adapt.dart';
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:video_thumbnail/video_thumbnail.dart';
 import 'package:path_provider/path_provider.dart';
 
@@ -233,43 +234,46 @@ class _FeedVideoWidgetState extends State<FeedVideoWidget> {
 
   Widget _getPicWidget() {
     if (_thumbnailFile == null) return const SizedBox();
-    
+
     return Container(
       width: double.infinity,
-      // height: 154.px, // Remove fixed height to allow adaptive height
-      child: ClipRRect(
+      height: 200,
+      decoration: BoxDecoration(
+        color: Color(0xFFC8DBEF).withOpacity(0.2),
         borderRadius: BorderRadius.circular(Adapt.px(12)),
-        child: Image.file(
-          _thumbnailFile!,
-          width: double.infinity,
-          // height: double.infinity, // Remove fixed height to allow image to scale proportionally
-          fit: BoxFit.cover,
-          cacheWidth: 420, // 2x for high DPI displays
-          cacheHeight: 308,
-          errorBuilder: (context, error, stackTrace) {
-            return Container(
-              width: double.infinity,
-              color: Colors.grey.shade400,
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    Icons.video_library,
-                    color: Colors.grey.shade600,
-                    size: 40.px,
-                  ),
-                  SizedBox(height: 8.px),
-                  Text(
-                    'Failed to load thumbnail',
-                    style: TextStyle(
-                      color: Colors.grey.shade600,
-                      fontSize: 12.px,
-                    ),
+      ),
+      child: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              padding: EdgeInsets.all(18),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.2),
+                    blurRadius: 2,
+                    offset: Offset(0, 1),
                   ),
                 ],
               ),
-            );
-          },
+              child: Image.asset(
+                'assets/images/video_unavailable_icon.png',
+                width: 28,
+                height: 28,
+              ),
+            ),
+            SizedBox(height: 8),
+            Text(
+              'Video unavailable',
+              style: GoogleFonts.inter(
+                fontWeight: FontWeight.w600,
+                color: Theme.of(context).colorScheme.outline,
+              ),
+            ),
+          ],
         ),
       ),
     );

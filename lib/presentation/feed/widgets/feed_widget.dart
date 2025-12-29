@@ -147,7 +147,9 @@ class _FeedWidgetState extends State<FeedWidget> {
         _showFeedContent().setPadding(
           EdgeInsets.only(left: widget.isShowContentLeftPadding ? 12 : 0 ,right: widget.horizontalPadding),
         ),
-        _showFeedMediaWidget(),
+        _showFeedMediaWidget().setPadding(
+        EdgeInsets.only(left: widget.isShowContentLeftPadding ? 12 : 0 ,right: widget.horizontalPadding),
+    ),
         FeedReplyAbbreviateWidget(
           notedUIModel: notedUIModel,
           isShowReplyWidget: widget.isShowReplyWidget,
@@ -368,7 +370,8 @@ class _FeedWidgetState extends State<FeedWidget> {
       child:
           isYoutube
               ? FeedWidgetsUtils.youtubeSurfaceMoment(context, videoUrl)
-              : FeedVideoWidget(videoUrl: videoUrl).setPaddingOnly(right: 16),
+              : FeedVideoWidget(videoUrl: videoUrl)
+              // .setPaddingOnly(right :widget.isShowContentLeftPadding ? 16 : 0),
     );
   }
 
