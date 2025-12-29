@@ -368,7 +368,7 @@ class _FeedWidgetState extends State<FeedWidget> {
       child:
           isYoutube
               ? FeedWidgetsUtils.youtubeSurfaceMoment(context, videoUrl)
-              : FeedVideoWidget(videoUrl: videoUrl),
+              : FeedVideoWidget(videoUrl: videoUrl).setPaddingOnly(right: 16),
     );
   }
 
