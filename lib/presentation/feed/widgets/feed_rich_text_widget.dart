@@ -76,6 +76,7 @@ class _FeedRichTextWidgetState extends State<FeedRichTextWidget>
     String getShowText =
         FeedContentAnalyzeUtils(widget.text).getMomentShowContent;
     final textSpans = _buildTextSpans(getShowText, context);
+    if(getShowText.isEmpty) return const SizedBox();
     return Container(
       key: _containerKey,
       alignment: Alignment.centerLeft,
