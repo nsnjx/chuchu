@@ -297,9 +297,9 @@ class _SearchPageState extends State<SearchPage> with ChuChuUIRefreshMixin {
             ),
           ],
         ),
-          child: Stack(
+        child: Stack(
           clipBehavior: Clip.none,
-            children: [
+          children: [
             // Gradient banner at top
             relayGroup.picture.isEmpty
                 ? pictureView
@@ -309,8 +309,8 @@ class _SearchPageState extends State<SearchPage> with ChuChuUIRefreshMixin {
                     topRight: Radius.circular(16),
                   ),
                   child: ChuChuCachedNetworkImage(
-                          imageUrl: relayGroup.picture,
-                          fit: BoxFit.cover,
+                    imageUrl: relayGroup.picture,
+                    fit: BoxFit.cover,
                     placeholder: (context, url) => pictureView,
                     errorWidget: (context, url, error) => pictureView,
                     height: 100,
@@ -345,8 +345,8 @@ class _SearchPageState extends State<SearchPage> with ChuChuUIRefreshMixin {
                                       iconName: 'icon_user_default.png',
                                       width: 80,
                                       height: 80,
-                              ),
-                          errorWidget:
+                                    ),
+                                errorWidget:
                                     (context, url, error) => CommonImage(
                                       iconName: 'icon_user_default.png',
                                       width: 80,
@@ -380,13 +380,13 @@ class _SearchPageState extends State<SearchPage> with ChuChuUIRefreshMixin {
                   // Display name and Follow button row
                   Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            relayGroup.name,
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              relayGroup.name,
                               style: GoogleFonts.inter(
                                 fontSize: 20,
                                 fontWeight: FontWeight.bold,
@@ -446,7 +446,7 @@ class _SearchPageState extends State<SearchPage> with ChuChuUIRefreshMixin {
                                     style: GoogleFonts.inter(
                                       fontSize: 14,
                                       fontWeight: FontWeight.w600,
-                              color: Colors.white,
+                                      color: Colors.white,
                                     ),
                                   ),
                                 ],
@@ -460,17 +460,17 @@ class _SearchPageState extends State<SearchPage> with ChuChuUIRefreshMixin {
                   SizedBox(height: 4),
                   // Bio
                   if (relayGroup.about.isNotEmpty)
-                          Text(
-                            relayGroup.about,
+                    Text(
+                      relayGroup.about,
                       style: GoogleFonts.inter(
-                              fontSize: 14,
+                        fontSize: 14,
                         fontWeight: FontWeight.w500,
                         color: theme.colorScheme.onSurfaceVariant,
                         height: 1.4,
-                            ),
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                          ),
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   SizedBox(height: 8),
                   // Followers and mutual connections
                   Row(
@@ -493,11 +493,11 @@ class _SearchPageState extends State<SearchPage> with ChuChuUIRefreshMixin {
                         ),
                       ),
                     ],
-                    ),
-                  ],
-                ),
+                  ),
+                ],
               ),
-            ],
+            ),
+          ],
         ),
       ),
     );
