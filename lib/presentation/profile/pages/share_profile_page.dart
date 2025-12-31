@@ -1,4 +1,3 @@
-import 'dart:io';
 import 'package:chuchu/core/relayGroups/model/relayGroupDB_isar.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -9,6 +8,7 @@ import 'package:image_gallery_saver_plus/image_gallery_saver_plus.dart';
 import 'package:nostr_core_dart/src/nips/nip_019.dart';
 
 import '../../../core/account/account.dart';
+import '../../../core/account/account+profile.dart';
 import '../../../core/account/model/userDB_isar.dart';
 import '../../../core/config/config.dart' as AppConfig;
 import '../../../core/relayGroups/relayGroup.dart';
@@ -34,7 +34,6 @@ class ShareProfilePage extends StatefulWidget {
 
 class _ShareProfilePageState extends State<ShareProfilePage> {
   final ScreenshotController _screenshotController = ScreenshotController();
-  UserDBISAR? _userInfo;
   RelayGroupDBISAR? _relayGroup;
   String? _npub;
   bool _isLoading = true;
@@ -49,8 +48,8 @@ class _ShareProfilePageState extends State<ShareProfilePage> {
     try {
       final pubkey = widget.pubkey;
 
-      // Get user info
-      final userInfo = await Account.sharedInstance.getUserInfo(pubkey);
+      // Reload user profile from relay first to ensure we have the latest data
+      await Account.sharedInstance.reloadProfileFromRelay(pubkey);
 
       // Get relay group info
       final relayGroup = await RelayGroup.sharedInstance
@@ -62,7 +61,6 @@ class _ShareProfilePageState extends State<ShareProfilePage> {
       final npub = Nip19.encodePubkey(pubkey);
 
       setState(() {
-        _userInfo = userInfo;
         _relayGroup = relayGroup;
         _npub = npub;
         _isLoading = false;
@@ -77,14 +75,17 @@ class _ShareProfilePageState extends State<ShareProfilePage> {
     }
   }
 
-  String _getDisplayName() {
-    if (_userInfo == null) return '--';
-    return _userInfo!.name ?? _userInfo!.nickName ?? _getTruncatedNpub();
-  }
-
-  String _getTruncatedNpub() {
-    if (_npub == null || _npub!.length < 12) return '--';
-    return '${_npub!.substring(0, 6)}...${_npub!.substring(_npub!.length - 6)}';
+  String _getDisplayNameFromUser(UserDBISAR userInfo) {
+    if (userInfo.name != null && userInfo.name!.isNotEmpty) {
+      return userInfo.name!;
+    }
+    if (userInfo.nickName != null && userInfo.nickName!.isNotEmpty) {
+      return userInfo.nickName!;
+    }
+    if (_npub != null && _npub!.length >= 12) {
+      return '${_npub!.substring(0, 6)}...${_npub!.substring(_npub!.length - 6)}';
+    }
+    return '--';
   }
 
   void _copyLink() {
@@ -119,28 +120,11 @@ class _ShareProfilePageState extends State<ShareProfilePage> {
   }
 
   Future<void> _share() async {
-    try {
-      final image = await _screenshotController.capture();
-      if (image == null) {
-        CommonToast.instance.show(context, 'Failed to capture image', toastType: ToastType.failed);
-        return;
-      }
-
-      // Save temporarily for sharing
-      final tempDir = Directory.systemTemp;
-      final file = File('${tempDir.path}/profile_share_${DateTime.now().millisecondsSinceEpoch}.png');
-      await file.writeAsBytes(image);
-
-      // Use platform channel to share (or use share_plus package if available)
-      if (Platform.isAndroid || Platform.isIOS) {
-        // For now, copy the npub to clipboard as fallback
-        _copyLink();
-        CommonToast.instance.show(context, 'Profile link copied. Share functionality coming soon.', toastType: ToastType.info);
-      } else {
-        _copyLink();
-      }
-    } catch (e) {
-      _copyLink();
+    // For now, copy the npub to clipboard as fallback
+    // TODO: Implement native share functionality
+    _copyLink();
+    if (mounted) {
+      CommonToast.instance.show(context, 'Profile link copied. Share functionality coming soon.', toastType: ToastType.info);
     }
   }
 
@@ -161,38 +145,44 @@ class _ShareProfilePageState extends State<ShareProfilePage> {
         ),
         backgroundColor: Colors.white,
         elevation: 0,
-        leading: IconButton(
-          icon: Icon(Icons.close, color: kTitleColor),
-          onPressed: () => Navigator.of(context).pop(),
+        leading: GestureDetector(
+          onTap: () => Navigator.of(context).pop(),
+          child: Center(
+            child: CommonImage(
+              iconName: 'back_arrow_icon.png',
+              size: 24,
+              color: kTitleColor,
+            ),
+          ),
         ),
       ),
       body: _isLoading
-          ? Center(child: CircularProgressIndicator())
+          ? const Center(child: CircularProgressIndicator())
           : SingleChildScrollView(
-        child: Column(
-          children: [
-            const SizedBox(height: 20),
-            // Profile Card
-            Screenshot(
-              controller: _screenshotController,
-              child: _buildProfileCard(theme),
+              child: Column(
+                children: [
+                  const SizedBox(height: 20),
+                  Screenshot(
+                    controller: _screenshotController,
+                    child: _buildProfileCard(theme),
+                  ),
+                  const SizedBox(height: 40),
+                  _buildActionButtons(theme),
+                  const SizedBox(height: 40),
+                ],
+              ),
             ),
-            const SizedBox(height: 40),
-            // Action Buttons
-            _buildActionButtons(theme),
-            const SizedBox(height: 40),
-          ],
-        ),
-      ),
     );
   }
 
-
-
   Widget _buildProfileCard(ThemeData theme) {
+    // Define constants for dynamic layout calculation
+    const double bannerHeight = 120.0;
+    const double avatarSize = 100.0;
+    const double avatarBorderWidth = 3.0;
 
     Widget pictureView = Container(
-      height: 100,
+      height: bannerHeight,
       decoration: BoxDecoration(
         borderRadius: BorderRadius.only(
           topLeft: Radius.circular(16),
@@ -217,183 +207,113 @@ class _ShareProfilePageState extends State<ShareProfilePage> {
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.1),
-            blurRadius: 20,
-            offset: Offset(0, 10),
+            color: Colors.black.withOpacity(0.2),
+            blurRadius: 4,
+            offset: Offset(0, 2),
           ),
         ],
       ),
       child: Column(
         children: [
-          // Gradient background with avatar
-          // Container(
-          //   width: double.infinity,
-          //   padding: const EdgeInsets.only(top: 40, bottom: 20),
-          //   decoration: BoxDecoration(
-          //     borderRadius: BorderRadius.only(
-          //       topLeft: Radius.circular(20),
-          //       topRight: Radius.circular(20),
-          //     ),
-          //     gradient: LinearGradient(
-          //       begin: Alignment.topLeft,
-          //       end: Alignment.topRight,
-          //       colors: [
-          //         Color(0xFFFFE4E6),
-          //         Color(0xFFE9D5FF),
-          //       ],
-          //     ),
-          //   ),
-          //   child: Column(
-          //     children: [
-          //       // Profile Picture
-          //       Container(
-          //         width: 100,
-          //         height: 100,
-          //         decoration: BoxDecoration(
-          //           shape: BoxShape.circle,
-          //           border: Border.all(
-          //             color: Colors.white,
-          //             width: 4,
-          //           ),
-          //         ),
-          //         child: ClipOval(
-          //           child: _userInfo?.picture != null && _userInfo!.picture!.isNotEmpty
-          //               ? ChuChuCachedNetworkImage(
-          //                   imageUrl: _userInfo!.picture!,
-          //                   fit: BoxFit.cover,
-          //                   width: 100,
-          //                   height: 100,
-          //                   placeholder: (_, __) => FeedWidgetsUtils.badgePlaceholderImage(),
-          //                   errorWidget: (_, __, ___) => FeedWidgetsUtils.badgePlaceholderImage(),
-          //                 )
-          //               : FeedWidgetsUtils.badgePlaceholderImage(),
-          //         ),
-          //       ),
-          //       const SizedBox(height: 20),
-          //       // Name
-          //       Text(
-          //         _getDisplayName(),
-          //         style: GoogleFonts.inter(
-          //           fontWeight: FontWeight.bold,
-          //           fontSize: 24,
-          //           color: kTitleColor,
-          //         ),
-          //       ),
-          //       const SizedBox(height: 8),
-          //       // Npub
-          //       Text(
-          //         _getTruncatedNpub(),
-          //         style: GoogleFonts.inter(
-          //           fontSize: 14,
-          //           color: theme.colorScheme.onSurfaceVariant,
-          //         ),
-          //       ),
-          //     ],
-          //   ),
-          // ),
-          // QR Code Section
-
-          Stack(
-            clipBehavior: Clip.none,
-            children: [
-              // Gradient banner at top
-              _relayGroup == null || _relayGroup!.picture.isEmpty
-                  ? pictureView
-                  : ClipRRect(
-                borderRadius: BorderRadius.only(
-                  topLeft: Radius.circular(16),
-                  topRight: Radius.circular(16),
-                ),
-                child: ChuChuCachedNetworkImage(
-                  imageUrl: _relayGroup!.picture,
-                  fit: BoxFit.cover,
-                  placeholder: (context, url) => pictureView,
-                  errorWidget: (context, url, error) => pictureView,
-                  height: 200,
-                  width: double.infinity,
-                ),
-              ),
-              // Profile picture overlapping banner
-              ValueListenableBuilder<UserDBISAR>(
-                valueListenable: Account.sharedInstance.getUserNotifier(
-                  widget.pubkey,
-                ),
-                builder: (context, userInfo, child) {
-                  return Positioned(
-                    left: 16,
-                    top: 50, // Half of banner height (100/2) to center overlap
-                    child: Container(
-                      width: 80,
-                      height: 80,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        border: Border.all(color: Colors.white, width: 3),
-                      ),
-                      child: ClipOval(
-                        child:
-                        userInfo.picture != null &&
-                            userInfo.picture!.isNotEmpty
-                            ? ChuChuCachedNetworkImage(
-                          imageUrl: userInfo.picture!,
+          SizedBox(
+            height: bannerHeight + (avatarSize / 2),
+            child: Stack(
+              clipBehavior: Clip.none,
+              children: [
+                // Gradient banner at top
+                _relayGroup == null || _relayGroup!.picture.isEmpty
+                    ? pictureView
+                    : ClipRRect(
+                        borderRadius: BorderRadius.only(
+                          topLeft: Radius.circular(16),
+                          topRight: Radius.circular(16),
+                        ),
+                        child: ChuChuCachedNetworkImage(
+                          imageUrl: _relayGroup!.picture,
                           fit: BoxFit.cover,
-                          placeholder:
-                              (context, url) => CommonImage(
-                            iconName: 'icon_user_default.png',
-                            width: 80,
-                            height: 80,
-                          ),
-                          errorWidget:
-                              (context, url, error) => CommonImage(
-                            iconName: 'icon_user_default.png',
-                            width: 80,
-                            height: 80,
-                          ),
-                          width: 80,
-                          height: 80,
-                        )
-                            : CommonImage(
-                          iconName: 'icon_user_default.png',
-                          width: 80,
-                          height: 80,
+                          placeholder: (context, url) => pictureView,
+                          errorWidget: (context, url, error) => pictureView,
+                          height: bannerHeight,
+                          width: double.infinity,
                         ),
                       ),
-                    ),
-                  );
-                },
-              ),
-
-              // Content section - starts from banner bottom, accounting for avatar overlap
-              Padding(
-                padding: EdgeInsets.fromLTRB(
-                  16,
-                  100 + 30,
-                  16,
-                  16,
-                ), // banner height + half avatar height
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Display name and Follow button row
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                _relayGroup?.name ?? _getDisplayName(),
-                                style: GoogleFonts.inter(
-                                  fontSize: 20,
-                                  fontWeight: FontWeight.bold,
-                                  color: kTitleColor,
-                                ),
-                              ),
-
-                            ],
+                // Profile picture overlapping banner
+                ValueListenableBuilder<UserDBISAR>(
+                  valueListenable: Account.sharedInstance.getUserNotifier(
+                    widget.pubkey,
+                  ),
+                  builder: (context, userInfo, child) {
+                    return Positioned(
+                      left: 0,
+                      right: 0,
+                      top: bannerHeight - avatarSize / 2,
+                      child: Center(
+                        child: Container(
+                          width: avatarSize,
+                          height: avatarSize,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            border: Border.all(color: Colors.white, width: avatarBorderWidth),
+                          ),
+                          child: ClipOval(
+                            child: userInfo.picture != null &&
+                                    userInfo.picture!.isNotEmpty
+                                ? ChuChuCachedNetworkImage(
+                                    imageUrl: userInfo.picture!,
+                                    fit: BoxFit.cover,
+                                    placeholder: (context, url) => CommonImage(
+                                      iconName: 'icon_user_default.png',
+                                      width: avatarSize,
+                                      height: avatarSize,
+                                    ),
+                                    errorWidget: (context, url, error) => CommonImage(
+                                      iconName: 'icon_user_default.png',
+                                      width: avatarSize,
+                                      height: avatarSize,
+                                    ),
+                                    width: avatarSize,
+                                    height: avatarSize,
+                                  )
+                                : CommonImage(
+                                    iconName: 'icon_user_default.png',
+                                    width: avatarSize,
+                                    height: avatarSize,
+                                  ),
                           ),
                         ),
-                      ],
+                      ),
+                    );
+                  },
+                ),
+              ],
+            ),
+          ),
+          // Content section - name and bio
+          Padding(
+            padding: const EdgeInsets.only(
+              top: 12,
+              left: 16,
+              right: 16,
+              bottom: 16,
+            ),
+            child: ValueListenableBuilder<UserDBISAR>(
+              valueListenable: Account.sharedInstance.getUserNotifier(
+                widget.pubkey,
+              ),
+              builder: (context, userInfo, child) {
+                String displayName = _relayGroup?.name ?? _getDisplayNameFromUser(userInfo);
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    // Display name
+                    Text(
+                      displayName,
+                      style: GoogleFonts.inter(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                        color: kTitleColor,
+                      ),
+                      textAlign: TextAlign.center,
                     ),
                     SizedBox(height: 4),
                     // Bio
@@ -406,62 +326,64 @@ class _ShareProfilePageState extends State<ShareProfilePage> {
                           color: theme.colorScheme.onSurfaceVariant,
                           height: 1.4,
                         ),
+                        textAlign: TextAlign.center,
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                       ),
                   ],
-                ),
-              ),
-            ],
+                );
+              },
+            ),
           ),
+          // QR Code Section
           Padding(
-            padding: const EdgeInsets.all(30),
+            padding: const EdgeInsets.only(left: 30, right: 30, bottom: 30),
             child: Column(
               children: [
-                Container(
-                  width: 220,
-                  height: 220,
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                      color: Colors.grey.shade200,
-                      width: 1,
-                    ),
-                  ),
+                SizedBox(
+                  width: 300,
+                  height: 300,
                   child: _npub != null
                       ? QrImageView(
-                    data: _npub!,
-                    version: QrVersions.auto,
-                    size: 188,
-                    backgroundColor: Colors.white,
-                    foregroundColor: Colors.black,
-                    errorStateBuilder: (context, error) {
-                      return Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(Icons.error_outline, size: 40, color: Colors.grey),
-                            const SizedBox(height: 8),
-                            Text(
-                              'QR Error',
-                              style: TextStyle(color: Colors.grey, fontSize: 12),
-                            ),
-                          ],
-                        ),
-                      );
-                    },
-                  )
-                      : Center(child: CircularProgressIndicator()),
+                          eyeStyle: const QrEyeStyle(
+                            eyeShape: QrEyeShape.circle,
+                            color: Colors.black,
+                          ),
+                          dataModuleStyle: const QrDataModuleStyle(
+                            dataModuleShape: QrDataModuleShape.circle,
+                            color: Colors.black,
+                          ),
+                          data: _npub!,
+                          version: QrVersions.auto,
+                          size: 188,
+                          backgroundColor: Colors.white,
+                          foregroundColor: Colors.black,
+                          errorStateBuilder: (context, error) {
+                            return const Center(
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(Icons.error_outline, size: 40, color: Colors.grey),
+                                  SizedBox(height: 8),
+                                  Text(
+                                    'QR Error',
+                                    style: TextStyle(color: Colors.grey, fontSize: 12),
+                                  ),
+                                ],
+                              ),
+                            );
+                          },
+                        )
+                      : const Center(child: CircularProgressIndicator()),
                 ),
                 const SizedBox(height: 16),
                 Text(
-                  'SCAN TO FOLLOW',
+                  'SCAN TO VIEW CREATOR',
                   style: GoogleFonts.inter(
                     fontSize: 12,
-                    color: theme.colorScheme.onSurfaceVariant,
+                    color: kTitleColor,
                     letterSpacing: 1.2,
+                    fontWeight: FontWeight.w800,
                   ),
                 ),
               ],
@@ -476,22 +398,25 @@ class _ShareProfilePageState extends State<ShareProfilePage> {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+        mainAxisAlignment: MainAxisAlignment.spaceAround,
         children: [
           _buildActionButton(
-            icon: Icons.copy,
+            iconName: 'copy_icon.png',
             label: 'Copy Link',
             onTap: _copyLink,
+            theme: theme,
           ),
           _buildActionButton(
-            icon: Icons.download,
+            iconName: 'down_image_icon.png',
             label: 'Save Image',
             onTap: _saveImage,
+            theme: theme,
           ),
           _buildActionButton(
-            icon: Icons.share,
+            iconName: 'share_icon.png',
             label: 'Share',
             onTap: _share,
+            theme: theme,
           ),
         ],
       ),
@@ -499,9 +424,10 @@ class _ShareProfilePageState extends State<ShareProfilePage> {
   }
 
   Widget _buildActionButton({
-    required IconData icon,
+    required String iconName,
     required String label,
     required VoidCallback onTap,
+    required ThemeData theme,
   }) {
     return GestureDetector(
       onTap: onTap,
@@ -512,19 +438,21 @@ class _ShareProfilePageState extends State<ShareProfilePage> {
             height: 60,
             decoration: BoxDecoration(
               color: Colors.white,
-              shape: BoxShape.circle,
+              borderRadius: BorderRadius.circular(12),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.1),
-                  blurRadius: 10,
-                  offset: Offset(0, 4),
+                  color: Colors.black.withOpacity(0.2),
+                  blurRadius: 2,
+                  offset: Offset(0, 2),
                 ),
               ],
             ),
-            child: Icon(
-              icon,
-              color: kTitleColor,
-              size: 24,
+            child: Center(
+              child: CommonImage(
+                iconName: iconName,
+                size: 24,
+                color: theme.colorScheme.onSurface,
+              ),
             ),
           ),
           const SizedBox(height: 8),
@@ -533,36 +461,12 @@ class _ShareProfilePageState extends State<ShareProfilePage> {
             style: GoogleFonts.inter(
               fontSize: 12,
               color: kTitleColor,
+              fontWeight: FontWeight.w600,
             ),
           ),
         ],
       ),
     );
-  }
-
-  String _getShortNpub(String pubkey) {
-    if (pubkey.length < 12) return pubkey;
-    return '${pubkey.substring(0, 6)}...${pubkey.substring(pubkey.length - 6)}';
-  }
-
-  String _formatFollowersCount(int count) {
-    if (count < 1000) {
-      return count.toString();
-    } else if (count < 1000000) {
-      double k = count / 1000;
-      if (k % 1 == 0) {
-        return '${k.toInt()}k';
-      } else {
-        return '${k.toStringAsFixed(1)}k';
-      }
-    } else {
-      double m = count / 1000000;
-      if (m % 1 == 0) {
-        return '${m.toInt()}M';
-      } else {
-        return '${m.toStringAsFixed(1)}M';
-      }
-    }
   }
 }
 
