@@ -93,6 +93,7 @@ dependencies:
       url: https://github.com/ArmanKT/image_gallery_saver_plus.git
       ref: master
   google_fonts: ^6.1.0
+  app_links: ^6.3.1
   nostr_core_dart:
     path: packages/nostr-dart
   isar_flutter_libs:
