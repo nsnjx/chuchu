@@ -18,6 +18,7 @@ import '../../../core/widgets/logout_confirm_dialog.dart';
 import '../../creator/pages/create_creator_page.dart';
 import '../../feed/pages/feed_personal_page.dart';
 import '../../profile/pages/my_profile_page.dart';
+import '../../profile/pages/share_profile_page.dart';
 import '../../search/pages/search_page.dart';
 import '../../wallet/wallet_page.dart';
 
@@ -334,6 +335,21 @@ class _DrawerMenuState extends State<DrawerMenu>
                           (context) =>
                               FeedPersonalPage(relayGroupDB: myRelayGroup),
                         );
+                      },
+                    ),
+                    _menuItem(
+                      context,
+                      'share_bg_icon.png',
+                      "Share Profile",
+                      onTap: () {
+                        Navigator.of(context).pop();
+                        final currentPubkey = ChuChuUserInfoManager.sharedInstance.currentUserInfo?.pubKey;
+                        if (currentPubkey != null && currentPubkey.isNotEmpty) {
+                          ChuChuNavigator.pushPage(
+                            context,
+                            (context) => ShareProfilePage(pubkey: currentPubkey),
+                          );
+                        }
                       },
                     ),
                     _menuItem(
