@@ -6,6 +6,7 @@ import 'package:qr_flutter/qr_flutter.dart';
 import 'package:screenshot/screenshot.dart';
 import 'package:image_gallery_saver_plus/image_gallery_saver_plus.dart';
 import 'package:nostr_core_dart/src/nips/nip_019.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../../../core/account/account.dart';
 import '../../../core/account/account+profile.dart';
@@ -120,11 +121,33 @@ class _ShareProfilePageState extends State<ShareProfilePage> {
   }
 
   Future<void> _share() async {
-    // For now, copy the npub to clipboard as fallback
-    // TODO: Implement native share functionality
-    _copyLink();
-    if (mounted) {
-      CommonToast.instance.show(context, 'Profile link copied. Share functionality coming soon.', toastType: ToastType.info);
+    if (_npub == null) {
+      if (mounted) {
+        CommonToast.instance.show(context, 'Profile not loaded', toastType: ToastType.failed);
+      }
+      return;
+    }
+
+    try {
+      final userInfo = await Account.sharedInstance.getUserInfo(widget.pubkey);
+      
+      String name = _relayGroup?.name ??
+          (userInfo?.name ?? userInfo?.nickName ?? 'User');
+      
+      String avatar = _relayGroup?.picture.isNotEmpty == true
+          ? _relayGroup!.picture 
+          : (userInfo?.picture ?? '');
+      
+      final shareLink = 'http://192.168.2.175:3000/invite?name=${Uri.encodeComponent(name)}&npub=${Uri.encodeComponent(_npub!)}&avatar=${Uri.encodeComponent(avatar)}&scheme=${Uri.encodeComponent('chuchu://')}';
+      
+      await Share.share(
+        shareLink,
+        subject: 'Share My Posts',
+      );
+    } catch (e) {
+      if (mounted) {
+        CommonToast.instance.show(context, 'Failed to share link', toastType: ToastType.failed);
+      }
     }
   }
 
@@ -341,8 +364,8 @@ class _ShareProfilePageState extends State<ShareProfilePage> {
             child: Column(
               children: [
                 SizedBox(
-                  width: 300,
-                  height: 300,
+                  width: 250,
+                  height: 250,
                   child: _npub != null
                       ? QrImageView(
                           eyeStyle: const QrEyeStyle(
