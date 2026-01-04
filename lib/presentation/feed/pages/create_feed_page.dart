@@ -184,8 +184,9 @@ class _CreateFeedPageState extends State<CreateFeedPage>
                                 onTap: () {
                                   Navigator.of(context).pop(false);
                                 },
+                                borderRadius: BorderRadius.circular(14),
                                 child: Container(
-                            
+                        
                                   padding: const EdgeInsets.symmetric(
                                     horizontal: 24,
                                     vertical: 16,
@@ -1637,28 +1638,21 @@ class _CreateFeedPageState extends State<CreateFeedPage>
     try {
       final currentPubkey = Account.sharedInstance.currentPubkey;
       if (currentPubkey.isEmpty) {
-        debugPrint('Load draft: currentPubkey is empty');
         return;
       }
-
-      debugPrint('Load draft: starting to load draft for pubkey: $currentPubkey');
 
       final isar = DBISAR.sharedInstance.isar;
       final draft = isar.feedDraftDBISARs.where().authorEqualTo(currentPubkey).findFirst();
       
       if (draft == null) {
-        debugPrint('Load draft: no draft found');
         return;
       }
-
-      debugPrint('Load draft: found draft with content length: ${draft.content.length}, images: ${draft.imageUrls?.length ?? 0}, videos: ${draft.videoUrls?.length ?? 0}');
 
       if (mounted) {
         _controller.value = TextEditingValue(
           text: draft.content,
           selection: TextSelection.collapsed(offset: draft.content.length),
         );
-        debugPrint('Load draft: restored text content: ${draft.content}');
       }
 
       if (draft.draftCueUserMapJson != null && draft.draftCueUserMapJson!.isNotEmpty) {
@@ -1671,22 +1665,18 @@ class _CreateFeedPageState extends State<CreateFeedPage>
               draftCueUserMap[key] = user;
             }
           });
-          debugPrint('Load draft: restored ${draftCueUserMap.length} @user mentions');
         } catch (e) {
-          debugPrint('Error parsing draftCueUserMapJson: $e');
+          // Ignore parsing errors
         }
       }
 
       _restoreMediaUrls(draft);
 
-      debugPrint('Load draft: completed, calling setState');
       if (mounted) {
-        setState(() {
-          debugPrint('Load draft: setState called, controller text: ${_controller.text}');
-        });
+        setState(() {});
       }
     } catch (e) {
-      debugPrint('Error loading draft: $e');
+      // Ignore loading errors
     }
   }
 
@@ -1694,13 +1684,11 @@ class _CreateFeedPageState extends State<CreateFeedPage>
     if (draft.imageUrls != null && draft.imageUrls!.isNotEmpty) {
       _uploadedImageUrls.clear();
       _uploadedImageUrls.addAll(draft.imageUrls!);
-      debugPrint('Load draft: restored ${_uploadedImageUrls.length} image URLs');
     }
 
     if (draft.videoUrls != null && draft.videoUrls!.isNotEmpty) {
       _uploadedVideoUrls.clear();
       _uploadedVideoUrls.addAll(draft.videoUrls!);
-      debugPrint('Load draft: restored ${_uploadedVideoUrls.length} video URLs');
     }
   }
 
@@ -1708,18 +1696,14 @@ class _CreateFeedPageState extends State<CreateFeedPage>
     try {
       final currentPubkey = Account.sharedInstance.currentPubkey;
       if (currentPubkey.isEmpty) {
-        debugPrint('Save draft: currentPubkey is empty');
         return;
       }
 
       final content = _controller.text;
       if (content.isEmpty && _uploadedImageUrls.isEmpty && _uploadedVideoUrls.isEmpty) {
-        debugPrint('Save draft: content is empty, deleting draft');
         await _deleteDraft();
         return;
       }
-
-      debugPrint('Save draft: saving draft with content length: ${content.length}, images: ${_uploadedImageUrls.length}, videos: ${_uploadedVideoUrls.length}');
 
       String? draftCueUserMapJson;
       if (draftCueUserMap.isNotEmpty) {
@@ -1737,7 +1721,7 @@ class _CreateFeedPageState extends State<CreateFeedPage>
           });
           draftCueUserMapJson = jsonEncode(mapData);
         } catch (e) {
-          debugPrint('Error encoding draftCueUserMap: $e');
+          // Ignore encoding errors
         }
       }
 
@@ -1751,21 +1735,27 @@ class _CreateFeedPageState extends State<CreateFeedPage>
       );
 
       await DBISAR.sharedInstance.saveToDB(draft);
-      debugPrint('Save draft: draft saved successfully');
     } catch (e) {
-      debugPrint('Error saving draft: $e');
+      // Ignore saving errors
     }
   }
 
   Future<void> _deleteDraft() async {
     try {
       final currentPubkey = Account.sharedInstance.currentPubkey;
-      if (currentPubkey.isEmpty) return;
+      if (currentPubkey.isEmpty) {
+        return;
+      }
 
       final isar = DBISAR.sharedInstance.isar;
-      isar.feedDraftDBISARs.where().authorEqualTo(currentPubkey).deleteAll();
+      await isar.write((isar) async {
+        isar.feedDraftDBISARs
+            .where()
+            .authorEqualTo(currentPubkey)
+            .deleteAll();
+      });
     } catch (e) {
-      debugPrint('Error deleting draft: $e');
+      // Ignore deletion errors
     }
   }
 
