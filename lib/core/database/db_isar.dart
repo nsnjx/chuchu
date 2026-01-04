@@ -21,6 +21,7 @@ import '../relayGroups/model/relayGroupDB_isar.dart';
 import '../wallet/model/wallet_info.dart';
 import '../wallet/model/wallet_transaction.dart';
 import '../wallet/model/wallet_invoice.dart';
+import '../feed/model/feedDraftDB_isar.dart';
 
 class DBISAR {
   static final DBISAR sharedInstance = DBISAR._internal();
@@ -64,6 +65,7 @@ class DBISAR {
     WalletInfoSchema,
     WalletTransactionSchema,
     WalletInvoiceSchema,
+    FeedDraftDBISARSchema,
   ];
 
   Future open(String pubkey) async {
@@ -255,6 +257,9 @@ class DBISAR {
         break;
       case WalletInvoice:
         _saveToCollection(objects.cast<WalletInvoice>().toList(), isar.walletInvoices);
+        break;
+      case FeedDraftDBISAR:
+        _saveToCollection(objects.cast<FeedDraftDBISAR>().toList(), isar.feedDraftDBISARs);
         break;
       default:
         // Fallback: try to use putAll directly (for types without id field or custom handling)
