@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
+import 'dart:ui';
 import 'dart:io'
     if (dart.library.html) 'package:chuchu/core/account/platform_stub.dart';
 import 'package:chuchu/core/widgets/common_image.dart';
@@ -108,6 +109,153 @@ class _CreateFeedPageState extends State<CreateFeedPage>
     } catch (e) {
       return false;
     }
+  }
+
+  Future<bool?> _showSaveDraftDialog() async {
+    return await showGeneralDialog<bool>(
+      context: context,
+      barrierDismissible: true,
+      barrierLabel: 'Save Draft Dialog',
+      barrierColor: Colors.transparent,
+      pageBuilder: (context, anim1, anim2) {
+        final theme = Theme.of(context);
+        final colorScheme = theme.colorScheme;
+        
+        return Stack(
+          children: [
+            Positioned.fill(
+              child: BackdropFilter(
+                filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
+                child: Container(color: Colors.black.withOpacity(0.2)),
+              ),
+            ),
+            Center(
+              child: SafeArea(
+                child: AlertDialog(
+                  insetPadding: const EdgeInsets.symmetric(horizontal: 18.0),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  backgroundColor: theme.dialogTheme.backgroundColor ??
+                      theme.colorScheme.surface,
+                  actionsPadding: const EdgeInsets.only(
+                    right: 24,
+                    bottom: 24,
+                    top: 8,
+                  ),
+                  title: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Image.asset(
+                        'assets/images/draft_icon.png',
+                        width: 28,
+                        height: 28,
+                        color: colorScheme.primary,
+                      ),
+                      const SizedBox(width: 12),
+                      Text(
+                        'Save Draft?',
+                        style: GoogleFonts.inter(
+                          color: kTitleColor,
+                          fontSize: 20,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ],
+                  ),
+                  content: Text(
+                    'You have unsaved changes. Do you want to save as draft?',
+                    style: GoogleFonts.inter(
+                      color: theme.colorScheme.onSurfaceVariant,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  actions: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Container(
+                            height: 50,
+                            child: Material(
+                              color: Colors.transparent,
+                              borderRadius: BorderRadius.circular(18),
+                              child: InkWell(
+                                onTap: () {
+                                  Navigator.of(context).pop(false);
+                                },
+                                child: Container(
+                            
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 24,
+                                    vertical: 16,
+                                  ),
+                                  alignment: Alignment.center,
+                                  child: Text(
+                                    'Discard',
+                                    style: GoogleFonts.inter(
+                                      color: theme.colorScheme.onSurfaceVariant,
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Container(
+                            height: 50,
+                            child: Material(
+                              color: Colors.transparent,
+                              borderRadius: BorderRadius.circular(18),
+                              child: InkWell(
+                                onTap: () {
+                                  Navigator.of(context).pop(true);
+                                },
+                                borderRadius: BorderRadius.circular(14),
+                                child: Container(
+                                  decoration: BoxDecoration(
+                                    gradient: getBrandGradientHorizontal(),
+                                    borderRadius: BorderRadius.circular(14),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: Colors.black.withOpacity(0.15),
+                                        blurRadius: 4,
+                                        offset: const Offset(0, 2),
+                                      ),
+                                    ],
+                                  ),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 24,
+                                    vertical: 16,
+                                  ),
+                                  alignment: Alignment.center,
+                                  child: Text(
+                                    'Save',
+                                    style: GoogleFonts.inter(
+                                      color: Colors.white,
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w800,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
   }
 
   Widget _buildPlatformImage(File image, {BoxFit fit = BoxFit.cover}) {
@@ -481,27 +629,7 @@ class _CreateFeedPageState extends State<CreateFeedPage>
           return true;
         }
 
-        final shouldSave = await showDialog<bool>(
-          context: context,
-          builder: (context) => AlertDialog(
-            title: const Text('Save Draft?'),
-            content: const Text('You have unsaved changes. Do you want to save as draft?'),
-            actions: [
-              TextButton(
-                onPressed: () {
-                  Navigator.pop(context, false);
-                },
-                child: const Text('Discard'),
-              ),
-              TextButton(
-                onPressed: () {
-                  Navigator.pop(context, true);
-                },
-                child: const Text('Save'),
-              ),
-            ],
-          ),
-        );
+        final shouldSave = await _showSaveDraftDialog();
 
         if (shouldSave == true) {
           await _saveDraft();
@@ -512,8 +640,8 @@ class _CreateFeedPageState extends State<CreateFeedPage>
         return true;
       },
       child: Scaffold(
-        resizeToAvoidBottomInset: true,
-        appBar: AppBar(
+      resizeToAvoidBottomInset: true,
+      appBar: AppBar(
         backgroundColor: theme.colorScheme.surface,
         foregroundColor: theme.colorScheme.onSurface,
         elevation: 0,
@@ -593,8 +721,8 @@ class _CreateFeedPageState extends State<CreateFeedPage>
               ),
             ],
           ),
+          ),
         ),
-      ),
       ),
     );
   }
@@ -1651,27 +1779,7 @@ class _CreateFeedPageState extends State<CreateFeedPage>
       return;
     }
 
-    final shouldSave = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text('Save Draft?'),
-        content: Text('You have unsaved changes. Do you want to save as draft?'),
-        actions: [
-          TextButton(
-            onPressed: () {
-              Navigator.pop(context, false);
-            },
-            child: Text('Discard'),
-          ),
-          TextButton(
-            onPressed: () {
-              Navigator.pop(context, true);
-            },
-            child: Text('Save'),
-          ),
-        ],
-      ),
-    );
+    final shouldSave = await _showSaveDraftDialog();
 
     if (shouldSave == true) {
       await _saveDraft();
