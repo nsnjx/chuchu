@@ -226,10 +226,10 @@ class _ChuChuTextPainter extends CustomPainter {
     );
     
 
-    _drawPathWithStrokeAndFill(
+    _drawPathWithGradientStrokeAndSolidFill(
       canvas: canvas,
       path: firstPath,
-      strokeColor: kTitleColor,
+      gradientColors: kGradientColors,
       fillColor: kTitleColor,
       strokeProgress: firstChuStroke,
       fillProgress: firstChuFill,
@@ -387,10 +387,19 @@ class _ChuChuTextPainter extends CustomPainter {
     return numbers;
   }
 
-  void _drawPathWithStrokeAndFill({
+  double _getPathLength(Path path) {
+    final metrics = path.computeMetrics();
+    double totalLength = 0;
+    for (final metric in metrics) {
+      totalLength += metric.length;
+    }
+    return totalLength;
+  }
+
+  void _drawPathWithGradientStrokeAndSolidFill({
     required Canvas canvas,
     required Path path,
-    required Color strokeColor,
+    required List<Color> gradientColors,
     required Color fillColor,
     required double strokeProgress,
     required double fillProgress,
@@ -411,8 +420,10 @@ class _ChuChuTextPainter extends CustomPainter {
           dashOffset: DashOffset.absolute(-dashOffset),
         );
         
+        final gradient = LinearGradient(colors: gradientColors);
+        
         final strokePaint = Paint()
-          ..color = strokeColor
+          ..shader = gradient.createShader(bounds)
           ..style = PaintingStyle.stroke
           ..strokeWidth = 1.5
           ..strokeCap = StrokeCap.round
@@ -429,16 +440,6 @@ class _ChuChuTextPainter extends CustomPainter {
       
       canvas.drawPath(path, fillPaint);
     }
-  }
-
-
-  double _getPathLength(Path path) {
-    final metrics = path.computeMetrics();
-    double totalLength = 0;
-    for (final metric in metrics) {
-      totalLength += metric.length;
-    }
-    return totalLength;
   }
 
   void _drawPathWithStrokeAndFillGradient({
