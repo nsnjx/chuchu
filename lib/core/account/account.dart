@@ -17,6 +17,7 @@ import 'package:nostr_core_dart/src/signer/external_signer_tool.dart';
 import '../utils/log_utils.dart';
 import '../wallet/wallet.dart';
 import '../relayGroups/model/relayGroupDB_isar.dart';
+import '../bookmark/bookmark_manager.dart';
 import 'model/userDB_isar.dart';
 import 'secure_account_storage.dart';
 
@@ -69,6 +70,7 @@ class Account {
     startHeartBeat();
     _loadAllUsers();
     initNIP46Callback();
+    BookmarkManager.sharedInstance.loadFromStorage();
   }
 
   void startHeartBeat() {

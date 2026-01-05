@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart' show GoogleFonts;
-import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../core/feed/model/noteDB_isar.dart';
 import '../../../core/feed/feed.dart';
 import '../../../core/feed/feed+load.dart';
+import '../../../core/bookmark/bookmark_manager.dart';
 import '../../../core/utils/navigator/navigator.dart';
 import '../../../core/utils/ui_refresh_mixin.dart';
 import '../../../core/widgets/chuchu_smart_refresher.dart';
@@ -25,14 +25,13 @@ class _BookmarksPageState extends State<BookmarksPage> with ChuChuUIRefreshMixin
   final RefreshController _refreshController = RefreshController();
   List<NotedUIModel?> _bookmarkedNotes = [];
   bool _isLoading = true;
-  static const String _bookmarksKey = 'bookmarked_note_ids';
+  Set<String> _loadingNoteIds = {};
 
   @override
   void initState() {
     super.initState();
     _loadBookmarks();
   }
-
 
   Future<void> _loadBookmarks() async {
     if (!mounted) return;
@@ -42,9 +41,7 @@ class _BookmarksPageState extends State<BookmarksPage> with ChuChuUIRefreshMixin
     });
 
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final noteIds = prefs.getStringList(_bookmarksKey) ?? [];
-      
+      final noteIds = BookmarkManager.sharedInstance.currentBookmarkedIds;
       await _loadNotesFromDB(noteIds);
     } catch (e) {
       if (mounted) {
@@ -60,7 +57,6 @@ class _BookmarksPageState extends State<BookmarksPage> with ChuChuUIRefreshMixin
       if (mounted) {
         setState(() {
           _isLoading = false;
-          _bookmarkedNotes = [];
         });
       }
       return;
@@ -88,15 +84,37 @@ class _BookmarksPageState extends State<BookmarksPage> with ChuChuUIRefreshMixin
         }
       }
 
-      notes.sort((a, b) => b.createAt.compareTo(a.createAt));
+      if (notes.isEmpty) {
+        if (mounted) {
+          setState(() {
+            _isLoading = false;
+          });
+        }
+        return;
+      }
 
       final notedUIModels = notes.map((note) {
         return NotedUIModel(noteDB: note);
       }).toList();
 
+      final currentNoteIds = _bookmarkedNotes
+          .where((note) => note?.noteDB.noteId != null)
+          .map((note) => note!.noteDB.noteId)
+          .toSet();
+
+      final newNotes = notedUIModels.where((note) {
+        return !currentNoteIds.contains(note.noteDB.noteId);
+      }).toList();
+
       if (mounted) {
         setState(() {
-          _bookmarkedNotes = notedUIModels;
+          _bookmarkedNotes.addAll(newNotes);
+          _bookmarkedNotes.sort((a, b) {
+            final aTime = a?.noteDB.createAt ?? 0;
+            final bTime = b?.noteDB.createAt ?? 0;
+            return bTime.compareTo(aTime);
+          });
+          _loadingNoteIds.removeAll(noteIds);
           _isLoading = false;
         });
       }
@@ -160,29 +178,65 @@ class _BookmarksPageState extends State<BookmarksPage> with ChuChuUIRefreshMixin
   }
 
   Widget _buildContent() {
-    if (_bookmarkedNotes.isEmpty) {
-      return _buildEmptyState();
-    }
+    return ValueListenableBuilder<List<String>>(
+      valueListenable: BookmarkManager.sharedInstance.bookmarkedNoteIds,
+      builder: (context, bookmarkedIds, child) {
+        if (bookmarkedIds.isEmpty) {
+          return _buildEmptyState();
+        }
 
-    return ListView.builder(
-      padding: const EdgeInsets.symmetric(vertical: 16),
-      itemCount: _bookmarkedNotes.length,
-      itemBuilder: (context, index) {
-        final note = _bookmarkedNotes[index];
-        if (note == null) return const SizedBox.shrink();
+        final currentNoteIds = _bookmarkedNotes
+            .where((note) => note?.noteDB.noteId != null)
+            .map((note) => note!.noteDB.noteId)
+            .toSet();
+
+        final newNoteIds = bookmarkedIds
+            .where((id) => !currentNoteIds.contains(id) && !_loadingNoteIds.contains(id))
+            .toList();
         
-        return Padding(
-          padding: const EdgeInsets.only(left: 16, right: 16, bottom: 16),
-          child: FeedWidget(
-            key: ValueKey(note.noteDB.noteId),
-            isShowReplyWidget: true,
-            feedWidgetLayout: EFeedWidgetLayout.fullScreen,
-            notedUIModel: note,
-            clickMomentCallback: (m) => ChuChuNavigator.pushPage(
-              context,
-              (_) => FeedInfoPage(notedUIModel: m),
-            ),
-          ),
+        if (newNoteIds.isNotEmpty) {
+          _loadingNoteIds.addAll(newNoteIds);
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            _loadNotesFromDB(newNoteIds);
+          });
+        }
+
+        final filteredNotes = _bookmarkedNotes.where((note) {
+          return note?.noteDB.noteId != null && 
+                 bookmarkedIds.contains(note!.noteDB.noteId);
+        }).toList();
+
+        if (filteredNotes.isEmpty && _isLoading) {
+          return Center(
+            child: CircularProgressIndicator(color: Theme.of(context).colorScheme.primary),
+          );
+        }
+
+        if (filteredNotes.isEmpty) {
+          return _buildEmptyState();
+        }
+
+        return ListView.builder(
+          padding: const EdgeInsets.symmetric(vertical: 16),
+          itemCount: filteredNotes.length,
+          itemBuilder: (context, index) {
+            final note = filteredNotes[index];
+            if (note == null) return const SizedBox.shrink();
+            
+            return Padding(
+              padding: const EdgeInsets.only(left: 16, right: 16, bottom: 16),
+              child: FeedWidget(
+                key: ValueKey(note.noteDB.noteId),
+                isShowReplyWidget: true,
+                feedWidgetLayout: EFeedWidgetLayout.fullScreen,
+                notedUIModel: note,
+                clickMomentCallback: (m) => ChuChuNavigator.pushPage(
+                  context,
+                  (_) => FeedInfoPage(notedUIModel: m),
+                ),
+              ),
+            );
+          },
         );
       },
     );

@@ -774,7 +774,8 @@ extension Load on Feed {
       }
       
       if (noteId != null) {
-        queryBuilder = queryBuilder.noteIdEqualTo(noteId);
+        queryBuilder = (queryBuilder as QueryBuilder<NoteDBISAR, NoteDBISAR, QFilterCondition>)
+            .noteIdEqualTo(noteId);
         if (isWeb && queryBuilder == null) {
           return _finalizeNoteResults(aggregated, limit);
         }
