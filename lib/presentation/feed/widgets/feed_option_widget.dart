@@ -4,6 +4,7 @@ import 'package:chuchu/core/widgets/common_image.dart';
 import 'package:chuchu/core/widgets/chuchu_Loading.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart' show GoogleFonts;
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../core/config/config.dart';
 import '../../../core/feed/feed.dart';
@@ -28,7 +29,9 @@ class FeedOptionWidget extends StatefulWidget {
 
 class _FeedOptionWidgetState extends State<FeedOptionWidget> {
   bool _reactionTag = false;
-  bool _isLiking = false; // Track like operation loading state
+  bool _isLiking = false;
+  bool _isBookmarked = false;
+  static const String _bookmarksKey = 'bookmarked_note_ids';
 
   late NotedUIModel? notedUIModel;
 
@@ -42,6 +45,22 @@ class _FeedOptionWidgetState extends State<FeedOptionWidget> {
   void initState() {
     super.initState();
     _init();
+    _checkBookmarkStatus();
+  }
+
+  Future<void> _checkBookmarkStatus() async {
+    if (widget.notedUIModel?.noteDB.noteId == null) return;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final bookmarkedIds = prefs.getStringList(_bookmarksKey) ?? [];
+      if (mounted) {
+        setState(() {
+          _isBookmarked = bookmarkedIds.contains(widget.notedUIModel!.noteDB.noteId);
+        });
+      }
+    } catch (e) {
+      // Silent fail
+    }
   }
 
   @override
@@ -92,14 +111,17 @@ class _FeedOptionWidgetState extends State<FeedOptionWidget> {
             ),
           ),
           Flexible(
-            flex: 1, // 25%
+            flex: 1,
             child: Align(
               alignment: Alignment.centerRight,
               child: GestureDetector(
                 onTap: _onBookmarkTap,
                 child: Padding(
                   padding: const EdgeInsets.only(left: 8.0),
-                  child: CommonImage(iconName: 'bookmark_icon.png',size: 18,),
+                  child: CommonImage(
+                    iconName: _isBookmarked ? 'bookmarked_icon.png' : 'bookmark_icon.png',
+                    size: 18,
+                  ),
                 ),
               ),
             ),
@@ -210,17 +232,32 @@ class _FeedOptionWidgetState extends State<FeedOptionWidget> {
     }
   }
 
-  void _onBookmarkTap() {
-    CommonToast.instance.show(context, 'Bookmarks coming soon',toastType:ToastType.info);
-    // setState(() {
-    //   _bookmarkTag = !_bookmarkTag;
-    // });
-    //
-    // if (_bookmarkTag) {
-    //   CommonToast.instance.show(context, 'Bookmarked');
-    // } else {
-    //   CommonToast.instance.show(context, 'Bookmark removed');
-    // }
+  Future<void> _onBookmarkTap() async {
+    if (widget.notedUIModel?.noteDB.noteId == null) return;
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final noteId = widget.notedUIModel!.noteDB.noteId;
+      List<String> bookmarkedIds = prefs.getStringList(_bookmarksKey) ?? [];
+
+      if (_isBookmarked) {
+        bookmarkedIds.remove(noteId);
+        CommonToast.instance.show(context, 'Bookmark removed', toastType: ToastType.success);
+      } else {
+        bookmarkedIds.add(noteId);
+        CommonToast.instance.show(context, 'Bookmarked', toastType: ToastType.success);
+      }
+
+      await prefs.setStringList(_bookmarksKey, bookmarkedIds);
+      
+      if (mounted) {
+        setState(() {
+          _isBookmarked = !_isBookmarked;
+        });
+      }
+    } catch (e) {
+      CommonToast.instance.show(context, 'Failed to update bookmark', toastType: ToastType.failed);
+    }
   }
 
 
@@ -539,6 +576,7 @@ class ReusableInteractionButtons extends StatefulWidget {
 
 class _ReusableInteractionButtonsState extends State<ReusableInteractionButtons> {
   bool _bookmarkTag = false;
+  static const String _bookmarksKey = 'bookmarked_note_ids';
 
   late NotedUIModel? draftNotedUIModel;
 
@@ -548,9 +586,19 @@ class _ReusableInteractionButtonsState extends State<ReusableInteractionButtons>
     _initBookmarkState();
   }
 
-  void _initBookmarkState() {
-    // Initialize bookmark state if needed
-    _bookmarkTag = false;
+  Future<void> _initBookmarkState() async {
+    if (widget.notedUIModel?.noteDB.noteId == null) return;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final bookmarkedIds = prefs.getStringList(_bookmarksKey) ?? [];
+      if (mounted) {
+        setState(() {
+          _bookmarkTag = bookmarkedIds.contains(widget.notedUIModel!.noteDB.noteId);
+        });
+      }
+    } catch (e) {
+      // Silent fail
+    }
   }
 
   @override
@@ -682,15 +730,31 @@ class _ReusableInteractionButtonsState extends State<ReusableInteractionButtons>
     CommonToast.instance.show(context, 'Zap functionality coming soon',toastType:ToastType.info);
   }
 
-  void _handleBookmarkTap() {
-    setState(() {
-      _bookmarkTag = !_bookmarkTag;
-    });
+  Future<void> _handleBookmarkTap() async {
+    if (widget.notedUIModel?.noteDB.noteId == null) return;
 
-    if (_bookmarkTag) {
-      CommonToast.instance.show(context, 'Bookmarked',toastType:ToastType.success);
-    } else {
-      CommonToast.instance.show(context, 'Bookmark removed',toastType:ToastType.success);
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final noteId = widget.notedUIModel!.noteDB.noteId;
+      List<String> bookmarkedIds = prefs.getStringList(_bookmarksKey) ?? [];
+
+      if (_bookmarkTag) {
+        bookmarkedIds.remove(noteId);
+        CommonToast.instance.show(context, 'Bookmark removed', toastType: ToastType.success);
+      } else {
+        bookmarkedIds.add(noteId);
+        CommonToast.instance.show(context, 'Bookmarked', toastType: ToastType.success);
+      }
+
+      await prefs.setStringList(_bookmarksKey, bookmarkedIds);
+      
+      if (mounted) {
+        setState(() {
+          _bookmarkTag = !_bookmarkTag;
+        });
+      }
+    } catch (e) {
+      CommonToast.instance.show(context, 'Failed to update bookmark', toastType: ToastType.failed);
     }
   }
 }

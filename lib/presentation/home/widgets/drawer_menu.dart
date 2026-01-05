@@ -21,6 +21,7 @@ import '../../profile/pages/my_profile_page.dart';
 import '../../profile/pages/share_profile_page.dart';
 import '../../search/pages/search_page.dart';
 import '../../wallet/wallet_page.dart';
+import '../../feed/pages/bookmarks_page.dart';
 
 class DrawerMenu extends StatefulWidget {
   const DrawerMenu({super.key});
@@ -373,6 +374,18 @@ class _DrawerMenuState extends State<DrawerMenu>
                         ChuChuNavigator.pushPage(
                           context,
                           (context) => SearchPage(),
+                        );
+                      },
+                    ),
+                    _menuItem(
+                      context,
+                      'bookmarks_bg_icon.png',
+                      "Bookmarks",
+                      onTap: () {
+                        Navigator.of(context).pop();
+                        ChuChuNavigator.pushPage(
+                          context,
+                          (context) => BookmarksPage(),
                         );
                       },
                     ),
