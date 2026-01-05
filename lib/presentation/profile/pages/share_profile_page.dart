@@ -432,7 +432,7 @@ class _ShareProfilePageState extends State<ShareProfilePage> {
         children: [
           _buildActionButton(
             iconName: 'copy_icon.png',
-            label: 'Copy Link',
+            label: 'Copy npub',
             onTap: _copyLink,
             theme: theme,
           ),
