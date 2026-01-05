@@ -14,6 +14,7 @@ import '../../../core/widgets/chuchu_Loading.dart';
 import 'package:chuchu/core/account/model/userDB_isar.dart';
 import 'package:chuchu/core/account/secure_account_storage.dart';
 import 'package:chuchu/core/widgets/common_image.dart';
+import '../../../core/widgets/common_toast.dart';
 // Conditional import for Platform class
 import 'dart:io'
     if (dart.library.html) 'package:chuchu/core/account/platform_stub.dart'
@@ -458,9 +459,7 @@ class _NewLoginPageState extends State<NewLoginPage> with ChuChuUIRefreshMixin {
 
   void _handleGuestMode() {
     // TODO: Implement guest mode
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text('Guest mode coming soon')));
+    CommonToast.instance.show(context, 'Guest mode coming soon', toastType: ToastType.info);
   }
 
   @override

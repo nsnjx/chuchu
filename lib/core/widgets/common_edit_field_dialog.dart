@@ -2,6 +2,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../theme/app_theme.dart';
+import 'common_toast.dart';
 
 class CommonEditFieldDialog extends StatefulWidget {
   final String title;
@@ -87,9 +88,7 @@ class _CommonEditFieldDialogState extends State<CommonEditFieldDialog> {
     if (widget.validator != null) {
       final error = widget.validator!(value);
       if (error != null) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(error)));
+        CommonToast.instance.show(context, error, toastType: ToastType.failed);
         return;
       }
     }
@@ -112,9 +111,7 @@ class _CommonEditFieldDialogState extends State<CommonEditFieldDialog> {
         setState(() {
           _isSaving = false;
         });
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Error: $e')));
+        CommonToast.instance.show(context, 'Error: $e', toastType: ToastType.failed);
       }
     }
   }

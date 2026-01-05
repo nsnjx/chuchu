@@ -14,6 +14,7 @@ import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/feed_widgets_utils.dart';
 import '../../../core/widgets/chuchu_cached_network_Image.dart';
 import '../../../core/widgets/common_image.dart';
+import '../../../core/widgets/common_toast.dart';
 import '../../../core/widgets/logout_confirm_dialog.dart';
 import '../../creator/pages/create_creator_page.dart';
 import '../../feed/pages/feed_personal_page.dart';
@@ -59,13 +60,7 @@ class _DrawerMenuState extends State<DrawerMenu>
     if (npub.isEmpty) return;
 
     Clipboard.setData(ClipboardData(text: npub));
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Copied to clipboard'),
-        backgroundColor: Colors.green,
-        duration: Duration(seconds: 2),
-      ),
-    );
+    CommonToast.instance.show(context, 'Copied to clipboard', toastType: ToastType.success);
   }
 
   @override

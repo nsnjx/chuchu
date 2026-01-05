@@ -6,6 +6,7 @@ import '../../core/wallet/model/wallet_transaction.dart';
 import '../../core/utils/ui_refresh_mixin.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/widgets/common_image.dart';
+import '../../core/widgets/common_toast.dart';
 import 'transaction_detail_page.dart';
 
 class TransactionsPage extends StatefulWidget {
@@ -42,12 +43,7 @@ class _TransactionsPageState extends State<TransactionsPage>
       setState(() {
         _isLoading = false;
       });
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Failed to load transactions: $e'),
-          backgroundColor: Colors.red,
-        ),
-      );
+      CommonToast.instance.show(context, 'Failed to load transactions: $e', toastType: ToastType.failed);
     }
   }
 

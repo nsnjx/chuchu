@@ -528,16 +528,7 @@ class _MyProfilePageState extends State<MyProfilePage>
           }
 
           // Show success message
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('$fieldName updated successfully!'),
-              backgroundColor: Colors.green,
-              behavior: SnackBarBehavior.floating,
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(12),
-            ),
-          ),
-        );
+          CommonToast.instance.show(context, '$fieldName updated successfully!', toastType: ToastType.success);
 
           // Refresh UI
           setState(() {});
@@ -782,14 +773,7 @@ class _MyProfilePageState extends State<MyProfilePage>
   }
 
   void _showErrorSnackBar(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: Colors.red,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      ),
-    );
+    CommonToast.instance.show(context, message, toastType: ToastType.failed);
   }
 
   Widget _buildLogoutButton() {

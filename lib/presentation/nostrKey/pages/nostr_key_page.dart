@@ -6,6 +6,7 @@ import '../../../core/utils/ui_refresh_mixin.dart';
 import 'package:nostr_core_dart/src/nips/nip_019.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../../core/widgets/common_image.dart';
+import '../../../core/widgets/common_toast.dart';
 import '../../../core/theme/app_theme.dart';
 
 class NostrKeyPage extends StatefulWidget {
@@ -295,17 +296,6 @@ class _NostrKeyPageState extends State<NostrKeyPage> with ChuChuUIRefreshMixin {
     if (text.isEmpty) return;
     
     Clipboard.setData(ClipboardData(text: text));
-    
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          '$keyType copied to clipboard',
-          style: GoogleFonts.inter(),
-        ),
-        duration: const Duration(seconds: 2),
-        behavior: SnackBarBehavior.floating,
-        backgroundColor: Theme.of(context).colorScheme.primary,
-      ),
-    );
+    CommonToast.instance.show(context, '$keyType copied to clipboard', toastType: ToastType.success);
   }
 } 

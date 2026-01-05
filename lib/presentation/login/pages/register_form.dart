@@ -12,6 +12,7 @@ import 'package:nostr_core_dart/src/nips/nip_019.dart';
 import '../../../core/account/secure_account_storage.dart';
 import '../../../core/widgets/chuchu_Loading.dart';
 import '../../../core/widgets/common_image.dart';
+import '../../../core/widgets/common_toast.dart';
 import '../../home/pages/home_page.dart';
 import '../../../core/theme/app_theme.dart';
 
@@ -48,12 +49,7 @@ class _RegisterFormState extends State<RegisterForm> {
 
   void _copyToClipboard(String text, String label) {
     Clipboard.setData(ClipboardData(text: text));
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('$label copied to clipboard'),
-        duration: Duration(seconds: 1),
-      ),
-    );
+    CommonToast.instance.show(context, '$label copied to clipboard', toastType: ToastType.success);
   }
 
   @override
