@@ -42,37 +42,47 @@ class _ShareProfilePageState extends State<ShareProfilePage> {
   @override
   void initState() {
     super.initState();
+    _loadFromDatabase();
     _loadUserInfo();
+  }
+
+  void _loadFromDatabase() {
+    final pubkey = widget.pubkey;
+    
+    // Calculate npub synchronously
+    final npub = Nip19.encodePubkey(pubkey);
+    
+    // Try to get relay group from memory cache (fastest)
+    RelayGroupDBISAR? relayGroup = RelayGroup.sharedInstance.groups[pubkey]?.value;
+    
+    setState(() {
+      _npub = npub;
+      _relayGroup = relayGroup;
+      _isLoading = false;
+    });
   }
 
   Future<void> _loadUserInfo() async {
     try {
       final pubkey = widget.pubkey;
 
-      // Reload user profile from relay first to ensure we have the latest data
+      // Reload user profile from relay to get the latest data
       await Account.sharedInstance.reloadProfileFromRelay(pubkey);
 
-      // Get relay group info
+      // Get relay group info from relay
       final relayGroup = await RelayGroup.sharedInstance
           .searchGroupsMetadataWithGroupID(
         pubkey,
         AppConfig.Config.sharedInstance.recommendGroupRelays.first,
       );
 
-      final npub = Nip19.encodePubkey(pubkey);
-
-      setState(() {
-        _relayGroup = relayGroup;
-        _npub = npub;
-        _isLoading = false;
-      });
-    } catch (e) {
-      setState(() {
-        _isLoading = false;
-      });
       if (mounted) {
-        CommonToast.instance.show(context, 'Failed to load user info', toastType: ToastType.failed);
+        setState(() {
+          _relayGroup = relayGroup;
+        });
       }
+    } catch (e) {
+      // Ignore errors, already showing cached data
     }
   }
 
