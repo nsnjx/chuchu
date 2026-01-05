@@ -7,6 +7,7 @@ import 'package:chuchu/core/account/model/userDB_isar.dart';
 import 'package:chuchu/presentation/feed/pages/feed_personal_page.dart';
 import 'package:google_fonts/google_fonts.dart' show GoogleFonts;
 import 'package:nostr_core_dart/src/nips/nip_019.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../core/account/account.dart';
 import '../../../core/account/account+profile.dart';
@@ -31,10 +32,14 @@ class _SearchPageState extends State<SearchPage> with ChuChuUIRefreshMixin {
   bool _isSearching = false;
   List<RelayGroupDBISAR> _searchResults = [];
   bool _hasSearched = false;
+  List<String> _searchHistory = [];
+  static const String _searchHistoryKey = 'search_history_pubkeys';
+  static const int _maxHistoryCount = 10;
 
   @override
   void initState() {
     super.initState();
+    _loadSearchHistory();
   }
 
   @override
@@ -83,10 +88,7 @@ class _SearchPageState extends State<SearchPage> with ChuChuUIRefreshMixin {
           },
           child: Column(
             children: [
-              // Search header
               _buildSearchHeader(),
-
-              // Search content
               Expanded(child: _buildSearchContent()),
             ],
           ),
@@ -102,7 +104,6 @@ class _SearchPageState extends State<SearchPage> with ChuChuUIRefreshMixin {
       padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
       child: Row(
         children: [
-          // Search input field
           Expanded(
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -126,17 +127,17 @@ class _SearchPageState extends State<SearchPage> with ChuChuUIRefreshMixin {
                       valueListenable: _searchController,
                       builder: (context, value, child) {
                         return TextField(
-                          controller: _searchController,
-                          focusNode: _searchFocusNode,
-                          decoration: InputDecoration(
-                            hintText: 'Search npub...',
-                            hintStyle: GoogleFonts.inter(
-                              color: theme.colorScheme.outline,
-                              fontSize: 14,
-                              fontWeight: FontWeight.w500,
-                            ),
-                            border: InputBorder.none,
-                            isDense: true,
+                      controller: _searchController,
+                      focusNode: _searchFocusNode,
+                      decoration: InputDecoration(
+                        hintText: 'Search npub...',
+                        hintStyle: GoogleFonts.inter(
+                          color: theme.colorScheme.outline,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500,
+                        ),
+                        border: InputBorder.none,
+                        isDense: true,
                               suffixIconConstraints:BoxConstraints(
                                 maxHeight: 16,
                                 maxWidth: 16
@@ -165,26 +166,26 @@ class _SearchPageState extends State<SearchPage> with ChuChuUIRefreshMixin {
                                     ),
                                   )
                                 : null,
-                          ),
-                          style: GoogleFonts.inter(
-                            color: kTitleColor,
-                            fontSize: 14,
-                            fontWeight: FontWeight.w500,
-                          ),
-                          onChanged: (value) {
-                            if (value.isEmpty) {
-                              setState(() {
-                                _hasSearched = false;
-                                _searchResults.clear();
-                              });
-                            } else {
-                              _performSearch(value);
-                            }
-                          },
-                          onSubmitted: (value) {
-                            if (value.isNotEmpty) {
-                              _performSearch(value);
-                            }
+                      ),
+                      style: GoogleFonts.inter(
+                        color: kTitleColor,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                      ),
+                      onChanged: (value) {
+                        if (value.isEmpty) {
+                          setState(() {
+                            _hasSearched = false;
+                            _searchResults.clear();
+                          });
+                        } else {
+                          _performSearch(value);
+                        }
+                      },
+                      onSubmitted: (value) {
+                        if (value.isNotEmpty) {
+                          _performSearch(value);
+                        }
                           },
                         );
                       },
@@ -203,7 +204,7 @@ class _SearchPageState extends State<SearchPage> with ChuChuUIRefreshMixin {
     final theme = Theme.of(context);
 
     if (!_hasSearched) {
-      // Show search icon placeholder
+      if (_searchHistory.isEmpty) {
       return Column(
         children: [
           CommonImage(iconName: 'search_ill_icon.png', width: 187),
@@ -227,10 +228,12 @@ class _SearchPageState extends State<SearchPage> with ChuChuUIRefreshMixin {
           ),
         ],
       ).setPaddingOnly(top: 60.0);
+      } else {
+        return _buildSearchHistory();
+      }
     }
 
     if (_isSearching) {
-      // Show loading
       return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -251,7 +254,6 @@ class _SearchPageState extends State<SearchPage> with ChuChuUIRefreshMixin {
     }
 
     if (_searchResults.isEmpty) {
-      // Show no data icon
       return Column(
         children: [
           CommonImage(iconName: 'no_result_ill.png', width: 187, height: 150),
@@ -277,7 +279,6 @@ class _SearchPageState extends State<SearchPage> with ChuChuUIRefreshMixin {
       ).setPaddingOnly(top: 60.0);
     }
 
-    // Show search results
     return ListView.builder(
       padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
       itemCount: _searchResults.length,
@@ -300,9 +301,9 @@ class _SearchPageState extends State<SearchPage> with ChuChuUIRefreshMixin {
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
           colors: [
-            Color(0xFF00CED1), // Blue-teal
-            Color(0xFFFFB900), // Golden yellow
-            Color(0xFFFF4444), // Red
+            Color(0xFF00CED1),
+            Color(0xFFFFB900),
+            Color(0xFFFF4444),
           ],
           stops: [0.0, 0.5, 1.0],
         ),
@@ -331,7 +332,6 @@ class _SearchPageState extends State<SearchPage> with ChuChuUIRefreshMixin {
         child: Stack(
           clipBehavior: Clip.none,
           children: [
-            // Gradient banner at top
             relayGroup.picture.isEmpty
                 ? pictureView
                 : ClipRRect(
@@ -348,7 +348,6 @@ class _SearchPageState extends State<SearchPage> with ChuChuUIRefreshMixin {
                     width: double.infinity,
                   ),
                 ),
-            // Profile picture overlapping banner
             ValueListenableBuilder<UserDBISAR>(
               valueListenable: Account.sharedInstance.getUserNotifier(
                 relayGroup.groupId,
@@ -356,7 +355,7 @@ class _SearchPageState extends State<SearchPage> with ChuChuUIRefreshMixin {
               builder: (context, userInfo, child) {
                 return Positioned(
                   left: 16,
-                  top: 50, // Half of banner height (100/2) to center overlap
+                  top: 50,
                   child: Container(
                     width: 80,
                     height: 80,
@@ -396,19 +395,16 @@ class _SearchPageState extends State<SearchPage> with ChuChuUIRefreshMixin {
                 );
               },
             ),
-
-            // Content section - starts from banner bottom, accounting for avatar overlap
             Padding(
               padding: EdgeInsets.fromLTRB(
                 16,
                 100 + 30,
                 16,
                 16,
-              ), // banner height + half avatar height
+              ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Display name and Follow button row
                   Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -425,7 +421,6 @@ class _SearchPageState extends State<SearchPage> with ChuChuUIRefreshMixin {
                               ),
                             ),
                             SizedBox(height: 2),
-                            // Username (npub short format)
                             Text(
                               '@${_getShortNpub(relayGroup.groupId)}',
                               style: GoogleFonts.inter(
@@ -438,7 +433,6 @@ class _SearchPageState extends State<SearchPage> with ChuChuUIRefreshMixin {
                         ),
                       ),
                       SizedBox(width: 12),
-                      // Follow button
                       Container(
                         decoration: BoxDecoration(
                           color: kTitleColor,
@@ -454,9 +448,7 @@ class _SearchPageState extends State<SearchPage> with ChuChuUIRefreshMixin {
                         child: Material(
                           color: Colors.transparent,
                           child: InkWell(
-                            onTap: () {
-                              // Handle follow action
-                            },
+                            onTap: () {},
                             borderRadius: BorderRadius.circular(20),
                             child: Padding(
                               padding: EdgeInsets.symmetric(
@@ -489,7 +481,6 @@ class _SearchPageState extends State<SearchPage> with ChuChuUIRefreshMixin {
                     ],
                   ),
                   SizedBox(height: 4),
-                  // Bio
                   if (relayGroup.about.isNotEmpty)
                     Text(
                       relayGroup.about,
@@ -503,7 +494,6 @@ class _SearchPageState extends State<SearchPage> with ChuChuUIRefreshMixin {
                       overflow: TextOverflow.ellipsis,
                     ),
                   SizedBox(height: 8),
-                  // Followers and mutual connections
                   Row(
                     children: [
                       Text(
@@ -537,7 +527,7 @@ class _SearchPageState extends State<SearchPage> with ChuChuUIRefreshMixin {
   String _getShortNpub(String pubkey) {
     try {
       final npub = Nip19.encodePubkey(pubkey);
-      if (npub.length < 12) return npub;
+    if (npub.length < 12) return npub;
       return '${npub.substring(0, 6)}:${npub.substring(npub.length - 6)}';
     } catch (e) {
       if (pubkey.length < 12) return pubkey;
@@ -565,28 +555,21 @@ class _SearchPageState extends State<SearchPage> with ChuChuUIRefreshMixin {
     }
   }
 
-  /// Validate npub1 format
-  /// npub1 format: starts with 'npub1' followed by bech32 encoded data
   bool _isValidNpub1(String input) {
     if (!input.startsWith('npub1')) {
       return false;
     }
 
-    // npub1 should be at least 63 characters long (npub1 + 58 chars of bech32 data)
     if (input.length < 63) {
       return false;
     }
 
-    // Extract the bech32 part (after 'npub1')
     String bech32Part = input.substring(5);
-
-    // Check if it contains only valid bech32 characters (qpzry9x8gf2tvdw0s3jn54khce6mua7l)
     RegExp bech32Regex = RegExp(r'^[qpzry9x8gf2tvdw0s3jn54khce6mua7l]+$');
     if (!bech32Regex.hasMatch(bech32Part)) {
       return false;
     }
 
-    // Additional length check for npub1 (should be around 63 characters)
     if (input.length != 63) {
       return false;
     }
@@ -607,7 +590,6 @@ class _SearchPageState extends State<SearchPage> with ChuChuUIRefreshMixin {
     try {
       String? pubkey;
       if (trimmedQuery.startsWith('npub1')) {
-        // Validate npub1 format
         if (!_isValidNpub1(trimmedQuery)) {
           print('🔍Invalid npub1 format: $trimmedQuery');
           setState(() {
@@ -616,7 +598,6 @@ class _SearchPageState extends State<SearchPage> with ChuChuUIRefreshMixin {
           });
           return;
         }
-        // Decode npub to get pubkey
         pubkey = UserDBISAR.decodePubkey(trimmedQuery);
         print('🔍Valid npub1 format, decoded pubkey: $pubkey');
       }
@@ -630,7 +611,6 @@ class _SearchPageState extends State<SearchPage> with ChuChuUIRefreshMixin {
         return;
       }
 
-      // Get user info from Account
       RelayGroupDBISAR? relayGroup = await RelayGroup.sharedInstance
           .searchGroupsMetadataWithGroupID(
             pubkey,
@@ -643,11 +623,8 @@ class _SearchPageState extends State<SearchPage> with ChuChuUIRefreshMixin {
       print('🔍name: ${relayGroup?.name}');
       print('🔍subscriptionAmount: ${relayGroup?.subscriptionAmount}');
 
-      // Trigger user info loading (including avatar) after getting relayGroup
       if (relayGroup != null) {
-        // Always reload profile from relay to get the latest user info (including avatar)
-        // This ensures we always show the most up-to-date information, even if user updated their avatar
-        print('🔍Reloading user profile from relay to get latest info...');
+        await _saveSearchHistory(relayGroup.groupId);
         Account.sharedInstance
             .reloadProfileFromRelay(pubkey)
             .then((updatedUser) {
@@ -661,10 +638,6 @@ class _SearchPageState extends State<SearchPage> with ChuChuUIRefreshMixin {
             .catchError((e) {
               print('🔍Error reloading profile from relay: $e');
             });
-
-        // getUserNotifier in _authorCard will return the user info from cache
-        // reloadProfileFromRelay will update the ValueNotifier when user info is loaded from relay
-        // This ensures the UI updates automatically when the latest info is available
       }
 
       if (mounted) {
@@ -686,5 +659,126 @@ class _SearchPageState extends State<SearchPage> with ChuChuUIRefreshMixin {
       }
       debugPrint('Search failed: $e');
     }
+  }
+
+  Future<void> _loadSearchHistory() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final history = prefs.getStringList(_searchHistoryKey) ?? [];
+      setState(() {
+        _searchHistory = history;
+      });
+    } catch (e) {
+      debugPrint('Failed to load search history: $e');
+    }
+  }
+
+  Future<void> _saveSearchHistory(String pubkey) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      List<String> history = prefs.getStringList(_searchHistoryKey) ?? [];
+      
+      history.remove(pubkey);
+      history.insert(0, pubkey);
+      
+      if (history.length > _maxHistoryCount) {
+        history = history.sublist(0, _maxHistoryCount);
+      }
+      
+      await prefs.setStringList(_searchHistoryKey, history);
+      setState(() {
+        _searchHistory = history;
+      });
+    } catch (e) {
+      debugPrint('Failed to save search history: $e');
+    }
+  }
+
+  Widget _buildSearchHistory() {
+    final theme = Theme.of(context);
+    final historyGroups = <RelayGroupDBISAR>[];
+    
+    for (var pubkey in _searchHistory) {
+      final group = RelayGroup.sharedInstance.groups[pubkey]?.value;
+      if (group != null && group.lastUpdatedTime > 0) {
+        historyGroups.add(group);
+      }
+    }
+
+    if (historyGroups.isEmpty) {
+      return Column(
+        children: [
+          CommonImage(iconName: 'search_ill_icon.png', width: 187),
+          const SizedBox(height: 20),
+          Text(
+            'Search by npub',
+            style: GoogleFonts.inter(
+              fontSize: 25,
+              color: kTitleColor,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Enter a npub address to discover\nand subscribe to creators',
+            style: GoogleFonts.inter(
+              color: theme.colorScheme.onSurfaceVariant,
+              fontSize: 16,
+            ),
+            textAlign: TextAlign.center,
+          ),
+        ],
+      ).setPaddingOnly(top: 60.0);
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          height: 35,
+          padding: const EdgeInsets.symmetric(horizontal: 18),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'Recent Searches',
+                style: GoogleFonts.inter(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  color: kTitleColor,
+                ),
+              ),
+              if (_searchHistory.isNotEmpty)
+                TextButton(
+                  onPressed: () async {
+                    final prefs = await SharedPreferences.getInstance();
+                    await prefs.remove(_searchHistoryKey);
+                    setState(() {
+                      _searchHistory.clear();
+                    });
+                  },
+                  child: Text(
+                    'Clear',
+                    style: GoogleFonts.inter(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: theme.colorScheme.primary,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+        Expanded(
+          child: ListView.builder(
+            padding: const EdgeInsets.symmetric(horizontal: 4),
+            itemCount: historyGroups.length,
+            itemBuilder: (context, index) {
+              return _authorCard(historyGroups[index]);
+            },
+          ),
+        ),
+      ],
+    );
   }
 }
