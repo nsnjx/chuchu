@@ -19,8 +19,6 @@ import '../../../core/widgets/chuchu_cached_network_Image.dart';
 import '../../../core/widgets/common_image.dart';
 import '../../../core/widgets/common_toast.dart';
 
-/// Share Profile Page
-/// Displays user profile with QR code for sharing
 class ShareProfilePage extends StatefulWidget {
   final String pubkey;
 
@@ -48,11 +46,7 @@ class _ShareProfilePageState extends State<ShareProfilePage> {
 
   void _loadFromDatabase() {
     final pubkey = widget.pubkey;
-    
-    // Calculate npub synchronously
     final npub = Nip19.encodePubkey(pubkey);
-    
-    // Try to get relay group from memory cache (fastest)
     RelayGroupDBISAR? relayGroup = RelayGroup.sharedInstance.groups[pubkey]?.value;
     
     setState(() {
@@ -65,24 +59,33 @@ class _ShareProfilePageState extends State<ShareProfilePage> {
   Future<void> _loadUserInfo() async {
     try {
       final pubkey = widget.pubkey;
+      UserDBISAR? userInfo = await Account.sharedInstance.getUserInfo(pubkey);
+      
+      if (userInfo != null) {
+        try {
+          await Account.sharedInstance.reloadProfileFromRelay(pubkey);
+        } catch (e) {
+          // Ignore
+        }
+      }
 
-      // Reload user profile from relay to get the latest data
-      await Account.sharedInstance.reloadProfileFromRelay(pubkey);
-
-      // Get relay group info from relay
-      final relayGroup = await RelayGroup.sharedInstance
-          .searchGroupsMetadataWithGroupID(
-        pubkey,
-        AppConfig.Config.sharedInstance.recommendGroupRelays.first,
-      );
-
-      if (mounted) {
-        setState(() {
-          _relayGroup = relayGroup;
-        });
+      try {
+        final relayGroup = await RelayGroup.sharedInstance
+            .getGroupMetadataFromRelay(
+          pubkey,
+          relay:  AppConfig.Config.sharedInstance.recommendGroupRelays.first,
+          author: pubkey,
+        );
+        if (mounted) {
+          setState(() {
+            _relayGroup = relayGroup;
+          });
+        }
+      } catch (e) {
+        // Ignore
       }
     } catch (e) {
-      // Ignore errors, already showing cached data
+      // Ignore
     }
   }
 
@@ -209,7 +212,6 @@ class _ShareProfilePageState extends State<ShareProfilePage> {
   }
 
   Widget _buildProfileCard(ThemeData theme) {
-    // Define constants for dynamic layout calculation
     const double bannerHeight = 120.0;
     const double avatarSize = 100.0;
     const double avatarBorderWidth = 3.0;
@@ -225,9 +227,9 @@ class _ShareProfilePageState extends State<ShareProfilePage> {
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
           colors: [
-            Color(0xFF00CED1), // Blue-teal
-            Color(0xFFFFB900), // Golden yellow
-            Color(0xFFFF4444), // Red
+            Color(0xFF00CED1),
+            Color(0xFFFFB900),
+            Color(0xFFFF4444),
           ],
           stops: [0.0, 0.5, 1.0],
         ),
@@ -253,7 +255,6 @@ class _ShareProfilePageState extends State<ShareProfilePage> {
             child: Stack(
               clipBehavior: Clip.none,
               children: [
-                // Gradient banner at top
                 _relayGroup == null || _relayGroup!.picture.isEmpty
                     ? pictureView
                     : ClipRRect(
@@ -270,7 +271,6 @@ class _ShareProfilePageState extends State<ShareProfilePage> {
                           width: double.infinity,
                         ),
                       ),
-                // Profile picture overlapping banner
                 ValueListenableBuilder<UserDBISAR>(
                   valueListenable: Account.sharedInstance.getUserNotifier(
                     widget.pubkey,
@@ -321,7 +321,6 @@ class _ShareProfilePageState extends State<ShareProfilePage> {
               ],
             ),
           ),
-          // Content section - name and bio
           Padding(
             padding: const EdgeInsets.only(
               top: 12,
@@ -338,7 +337,6 @@ class _ShareProfilePageState extends State<ShareProfilePage> {
                 return Column(
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
-                    // Display name
                     Text(
                       displayName,
                       style: GoogleFonts.inter(
@@ -349,7 +347,6 @@ class _ShareProfilePageState extends State<ShareProfilePage> {
                       textAlign: TextAlign.center,
                     ),
                     SizedBox(height: 4),
-                    // Bio
                     if (_relayGroup != null && _relayGroup!.about.isNotEmpty)
                       Text(
                         _relayGroup!.about,
@@ -368,7 +365,6 @@ class _ShareProfilePageState extends State<ShareProfilePage> {
               },
             ),
           ),
-          // QR Code Section
           Padding(
             padding: const EdgeInsets.only(left: 30, right: 30, bottom: 30),
             child: Column(

@@ -19,6 +19,7 @@ import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/common_image.dart';
 import '../../../data/models/noted_ui_model.dart';
 import '../../profile/pages/profile_edit_page.dart';
+import '../../profile/pages/share_profile_page.dart';
 import '../widgets/feed_personal_header_widget.dart';
 import '../widgets/feed_widget.dart';
 import '../widgets/subscribed_ui_widget.dart';
@@ -191,18 +192,31 @@ class _FeedPersonalPageState extends State<FeedPersonalPage>
   }
 
   Widget actionWidget() {
-    if (subscriptionStatus != ESubscriptionStatus.author) {
-      return const SizedBox();
+    if (subscriptionStatus == ESubscriptionStatus.author) {
+      return IconButton(
+        onPressed: () {
+          ChuChuNavigator.pushPage(
+            context,
+            (context) => ProfileEditPage(relayGroup: widget.relayGroupDB),
+          );
+        },
+        icon: CommonImage(
+          iconName: 'setting_icon.png',
+          size: 24,
+          color: Colors.white,
+        ),
+      );
     }
+    
     return IconButton(
       onPressed: () {
         ChuChuNavigator.pushPage(
           context,
-          (context) => ProfileEditPage(relayGroup: widget.relayGroupDB),
+          (context) => ShareProfilePage(pubkey: widget.relayGroupDB.groupId),
         );
       },
       icon: CommonImage(
-        iconName: 'setting_icon.png',
+        iconName: 'share_icon.png',
         size: 24,
         color: Colors.white,
       ),
