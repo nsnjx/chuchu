@@ -122,40 +122,71 @@ class _SearchPageState extends State<SearchPage> with ChuChuUIRefreshMixin {
 
                   const SizedBox(width: 12),
                   Expanded(
-                    child: TextField(
-                      controller: _searchController,
-                      focusNode: _searchFocusNode,
-                      decoration: InputDecoration(
-                        hintText: 'Search npub...',
-                        hintStyle: GoogleFonts.inter(
-                          color: theme.colorScheme.outline,
-                          fontSize: 14,
-                          fontWeight: FontWeight.w500,
-                        ),
-                        border: InputBorder.none,
-                        isDense: true,
-                      ),
-                      style: GoogleFonts.inter(
-                        color: kTitleColor,
-                        fontSize: 14,
-                        fontWeight: FontWeight.w500,
-                      ),
-                      onChanged: (value) {
-                        // Handle search input changes
-                        if (value.isEmpty) {
-                          setState(() {
-                            _hasSearched = false;
-                            _searchResults.clear();
-                          });
-                        } else {
-                          _performSearch(value);
-                        }
-                      },
-                      onSubmitted: (value) {
-                        // Handle search submission
-                        if (value.isNotEmpty) {
-                          _performSearch(value);
-                        }
+                    child: ValueListenableBuilder<TextEditingValue>(
+                      valueListenable: _searchController,
+                      builder: (context, value, child) {
+                        return TextField(
+                          controller: _searchController,
+                          focusNode: _searchFocusNode,
+                          decoration: InputDecoration(
+                            hintText: 'Search npub...',
+                            hintStyle: GoogleFonts.inter(
+                              color: theme.colorScheme.outline,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w500,
+                            ),
+                            border: InputBorder.none,
+                            isDense: true,
+                              suffixIconConstraints:BoxConstraints(
+                                maxHeight: 16,
+                                maxWidth: 16
+                              ),
+                            suffixIcon: value.text.isNotEmpty
+                                ? GestureDetector(
+                                    onTap: () {
+                                      _searchController.clear();
+                                      setState(() {
+                                        _hasSearched = false;
+                                        _searchResults.clear();
+                                      });
+                                    },
+                                    child: Container(
+                                      width: 16,
+                                      height: 16,
+                                      decoration: BoxDecoration(
+                                        shape: BoxShape.circle,
+                                        color: theme.colorScheme.onSurfaceVariant,
+                                      ),
+                                      child: Icon(
+                                        Icons.close,
+                                        size: 10,
+                                        color: Colors.white,
+                                      ),
+                                    ),
+                                  )
+                                : null,
+                          ),
+                          style: GoogleFonts.inter(
+                            color: kTitleColor,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
+                          ),
+                          onChanged: (value) {
+                            if (value.isEmpty) {
+                              setState(() {
+                                _hasSearched = false;
+                                _searchResults.clear();
+                              });
+                            } else {
+                              _performSearch(value);
+                            }
+                          },
+                          onSubmitted: (value) {
+                            if (value.isNotEmpty) {
+                              _performSearch(value);
+                            }
+                          },
+                        );
                       },
                     ),
                   ),
