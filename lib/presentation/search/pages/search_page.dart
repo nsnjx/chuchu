@@ -6,6 +6,7 @@ import 'package:chuchu/core/widgets/common_image.dart';
 import 'package:chuchu/core/account/model/userDB_isar.dart';
 import 'package:chuchu/presentation/feed/pages/feed_personal_page.dart';
 import 'package:google_fonts/google_fonts.dart' show GoogleFonts;
+import 'package:nostr_core_dart/src/nips/nip_019.dart';
 
 import '../../../core/account/account.dart';
 import '../../../core/account/account+profile.dart';
@@ -27,7 +28,6 @@ class _SearchPageState extends State<SearchPage> with ChuChuUIRefreshMixin {
   final TextEditingController _searchController = TextEditingController();
   final FocusNode _searchFocusNode = FocusNode();
 
-  // Search state
   bool _isSearching = false;
   List<RelayGroupDBISAR> _searchResults = [];
   bool _hasSearched = false;
@@ -503,9 +503,15 @@ class _SearchPageState extends State<SearchPage> with ChuChuUIRefreshMixin {
     );
   }
 
-  String _getShortNpub(String npub) {
-    if (npub.length < 12) return npub;
-    return '${npub.substring(0, 6)}...${npub.substring(npub.length - 6)}';
+  String _getShortNpub(String pubkey) {
+    try {
+      final npub = Nip19.encodePubkey(pubkey);
+      if (npub.length < 12) return npub;
+      return '${npub.substring(0, 6)}:${npub.substring(npub.length - 6)}';
+    } catch (e) {
+      if (pubkey.length < 12) return pubkey;
+      return '${pubkey.substring(0, 6)}:${pubkey.substring(pubkey.length - 6)}';
+    }
   }
 
   String _formatFollowersCount(int count) {
