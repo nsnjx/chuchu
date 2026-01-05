@@ -134,6 +134,7 @@ class _ShareProfilePageState extends State<ShareProfilePage> {
   }
 
   Future<void> _share() async {
+    return CommonToast.instance.show(context, 'Comming soon', toastType: ToastType.info);
     if (_npub == null) {
       if (mounted) {
         CommonToast.instance.show(context, 'Profile not loaded', toastType: ToastType.failed);
