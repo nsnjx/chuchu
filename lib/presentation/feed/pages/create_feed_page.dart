@@ -1,10 +1,8 @@
-import 'dart:async';
 import 'dart:convert';
-import 'dart:typed_data';
-import 'dart:ui';
 import 'dart:io'
     if (dart.library.html) 'package:chuchu/core/account/platform_stub.dart';
-import 'package:chuchu/core/widgets/common_image.dart';
+import 'dart:typed_data';
+import 'dart:ui';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:isar/isar.dart' hide Filter;
 import 'package:nostr_core_dart/nostr.dart';
@@ -28,6 +26,7 @@ import '../../../core/utils/feed_utils.dart';
 import '../../../core/utils/feed_widgets_utils.dart';
 import '../../../core/widgets/chuchu_Loading.dart';
 import '../../../core/widgets/chuchu_cached_network_Image.dart';
+import '../../../core/widgets/common_image.dart';
 import '../../../core/widgets/common_toast.dart';
 import '../../../data/models/noted_ui_model.dart';
 import '../../../core/utils/ui_refresh_mixin.dart';
@@ -36,8 +35,11 @@ import '../../../core/database/db_isar.dart';
 import 'package:chuchu/core/account/web_file_registry_stub.dart'
     if (dart.library.html) 'package:chuchu/core/account/web_file_registry.dart'
     as web_file_registry;
+import 'package:path/path.dart' as p;
 
-import 'package:path/path.dart' as Path;
+// Media upload components
+import '../../../core/media/media_state.dart';
+import '../../../core/media/widgets/upload_status_badge.dart';
 
 class CreateFeedPage extends StatefulWidget {
   final NotedUIModel? notedUIModel;
@@ -50,50 +52,18 @@ class CreateFeedPage extends StatefulWidget {
 class _CreateFeedPageState extends State<CreateFeedPage>
     with ChuChuFeedObserver, ChuChuUIRefreshMixin {
   final TextEditingController _controller = TextEditingController();
-  List<File> _selectedImages = [];
-  final List<String> _uploadedImageUrls = [];
-  final Map<int, bool> _uploadingStatus =
-      {};
 
-  List<File> _selectedVideos = [];
-  final List<String> _uploadedVideoUrls = [];
-  final Map<int, bool> _videoUploadingStatus =
-      {};
-  final Map<int, Uint8List?> _videoThumbnails = {};
+  // Media upload state using shared MediaUploadState
+  final MediaUploadState mediaState = MediaUploadState();
 
   Map<String, UserDBISAR> draftCueUserMap = {};
 
   bool _postFeedTag = false;
-  bool _isUploading = false;
 
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _loadDraft();
-    });
-  }
+  /// Check if any media is currently uploading
+  bool isAnyUploading() => mediaState.isAnyUploading;
 
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  bool _isAnyUploading() {
-    for (int i = 0; i < _selectedImages.length; i++) {
-      if (_uploadingStatus[i] == true) {
-        return true;
-      }
-    }
-    for (int i = 0; i < _selectedVideos.length; i++) {
-      if (_videoUploadingStatus[i] == true) {
-        return true;
-      }
-    }
-    return false;
-  }
-
+  /// Check file size against max limit (20 MiB)
   Future<bool> _checkFileSize(File file) async {
     try {
       int fileSize;
@@ -110,6 +80,21 @@ class _CreateFeedPageState extends State<CreateFeedPage>
       return false;
     }
   }
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadDraft();
+    });
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
 
   Future<bool?> _showSaveDraftDialog() async {
     return await showGeneralDialog<bool>(
@@ -301,14 +286,14 @@ class _CreateFeedPageState extends State<CreateFeedPage>
         }
       }
       setState(() {
-        _selectedImages.addAll(filesToAdd);
+        mediaState.selectedImages.addAll(filesToAdd);
         for (
-          int i = _uploadedImageUrls.length;
-          i < _selectedImages.length;
+          int i = mediaState.uploadedImageUrls.length;
+          i < mediaState.selectedImages.length;
           i++
         ) {
-          if (!_uploadingStatus.containsKey(i)) {
-            _uploadingStatus[i] = false;
+          if (!mediaState.imageUploadingStatus.containsKey(i)) {
+            mediaState.imageUploadingStatus[i] = false;
           }
         }
       });
@@ -337,10 +322,10 @@ class _CreateFeedPageState extends State<CreateFeedPage>
         videoFile = File(picked.path);
       }
       setState(() {
-        _selectedVideos.add(videoFile);
-        final index = _selectedVideos.length - 1;
-        if (!_videoUploadingStatus.containsKey(index)) {
-          _videoUploadingStatus[index] = false;
+        mediaState.selectedVideos.add(videoFile);
+        final index = mediaState.selectedVideos.length - 1;
+        if (!mediaState.videoUploadingStatus.containsKey(index)) {
+          mediaState.videoUploadingStatus[index] = false;
         }
         _generateVideoThumbnail(videoFile, index);
       });
@@ -354,27 +339,27 @@ class _CreateFeedPageState extends State<CreateFeedPage>
 
   void _removeImage(int index) {
     setState(() {
-      final removedImage = _selectedImages.removeAt(index);
-      final wasUploading = _uploadingStatus[index] == true;
-      _uploadingStatus.remove(index);
-      if (index < _uploadedImageUrls.length) {
-        _uploadedImageUrls.removeAt(index);
+      final removedImage = mediaState.selectedImages.removeAt(index);
+      final wasUploading = mediaState.imageUploadingStatus[index] == true;
+      mediaState.imageUploadingStatus.remove(index);
+      if (index < mediaState.uploadedImageUrls.length) {
+        mediaState.uploadedImageUrls.removeAt(index);
       }
       if (kIsWeb) {
         web_file_registry.unregisterWebFileData(removedImage.path);
       }
       final newStatus = <int, bool>{};
-      _uploadingStatus.forEach((key, value) {
+      mediaState.imageUploadingStatus.forEach((key, value) {
         if (key > index) {
           newStatus[key - 1] = value;
         } else if (key < index) {
           newStatus[key] = value;
         }
       });
-      _uploadingStatus.clear();
-      _uploadingStatus.addAll(newStatus);
-      if (wasUploading && !_isAnyUploading()) {
-        _isUploading = false;
+      mediaState.imageUploadingStatus.clear();
+      mediaState.imageUploadingStatus.addAll(newStatus);
+      if (wasUploading && !isAnyUploading()) {
+        mediaState.isUploading = false;
       }
       
     });
@@ -382,38 +367,38 @@ class _CreateFeedPageState extends State<CreateFeedPage>
 
   void _removeVideo(int index) {
     setState(() {
-      final removedVideo = _selectedVideos.removeAt(index);
-      final wasUploading = _videoUploadingStatus[index] == true;
-      _videoUploadingStatus.remove(index);
-      _videoThumbnails.remove(index);
-      if (index < _uploadedVideoUrls.length) {
-        _uploadedVideoUrls.removeAt(index);
+      final removedVideo = mediaState.selectedVideos.removeAt(index);
+      final wasUploading = mediaState.videoUploadingStatus[index] == true;
+      mediaState.videoUploadingStatus.remove(index);
+      mediaState.videoThumbnails.remove(index);
+      if (index < mediaState.uploadedVideoUrls.length) {
+        mediaState.uploadedVideoUrls.removeAt(index);
       }
       if (kIsWeb) {
         web_file_registry.unregisterWebFileData(removedVideo.path);
       }
       final newStatus = <int, bool>{};
       final newThumbnails = <int, Uint8List?>{};
-      _videoUploadingStatus.forEach((key, value) {
+      mediaState.videoUploadingStatus.forEach((key, value) {
         if (key > index) {
           newStatus[key - 1] = value;
         } else if (key < index) {
           newStatus[key] = value;
         }
       });
-      _videoThumbnails.forEach((key, value) {
+      mediaState.videoThumbnails.forEach((key, value) {
         if (key > index) {
           newThumbnails[key - 1] = value;
         } else if (key < index) {
           newThumbnails[key] = value;
         }
       });
-      _videoUploadingStatus.clear();
-      _videoThumbnails.clear();
-      _videoUploadingStatus.addAll(newStatus);
-      _videoThumbnails.addAll(newThumbnails);
-      if (wasUploading && !_isAnyUploading()) {
-        _isUploading = false;
+      mediaState.videoUploadingStatus.clear();
+      mediaState.videoThumbnails.clear();
+      mediaState.videoUploadingStatus.addAll(newStatus);
+      mediaState.videoThumbnails.addAll(newThumbnails);
+      if (wasUploading && !isAnyUploading()) {
+        mediaState.isUploading = false;
       }
       
     });
@@ -430,7 +415,7 @@ class _CreateFeedPageState extends State<CreateFeedPage>
 
       if (thumbnail != null && mounted) {
         setState(() {
-          _videoThumbnails[index] = thumbnail;
+          mediaState.videoThumbnails[index] = thumbnail;
         });
       }
     } catch (e) {
@@ -438,15 +423,15 @@ class _CreateFeedPageState extends State<CreateFeedPage>
   }
 
   Future<void> _uploadNewImages() async {
-    if (_isUploading) return;
+    if (mediaState.isUploading) return;
 
     setState(() {
-      _isUploading = true;
+      mediaState.isUploading = true;
     });
 
     try {
       final indicesToUpload = <int>[];
-      for (int i = _uploadedImageUrls.length; i < _selectedImages.length; i++) {
+      for (int i = mediaState.uploadedImageUrls.length; i < mediaState.selectedImages.length; i++) {
         indicesToUpload.add(i);
       }
 
@@ -454,7 +439,7 @@ class _CreateFeedPageState extends State<CreateFeedPage>
       for (int i in indicesToUpload) {
         if (!mounted) return;
 
-        final imageFile = _selectedImages[i];
+        final imageFile = mediaState.selectedImages[i];
 
         try {
           final exceedsSize = await _checkFileSize(imageFile);
@@ -472,7 +457,7 @@ class _CreateFeedPageState extends State<CreateFeedPage>
 
           if (mounted) {
             setState(() {
-              _uploadingStatus[i] = true;
+              mediaState.imageUploadingStatus[i] = true;
             });
           }
 
@@ -499,8 +484,8 @@ class _CreateFeedPageState extends State<CreateFeedPage>
           if (imageUrl != null && imageUrl.isNotEmpty) {
             if (mounted) {
               setState(() {
-                _uploadedImageUrls.add(imageUrl);
-                _uploadingStatus[i] = false;
+                mediaState.uploadedImageUrls.add(imageUrl);
+                mediaState.imageUploadingStatus[i] = false;
               });
             }
           } else {
@@ -525,22 +510,22 @@ class _CreateFeedPageState extends State<CreateFeedPage>
     } finally {
       if (mounted) {
         setState(() {
-          _isUploading = false;
+          mediaState.isUploading = false;
         });
       }
     }
   }
 
   Future<void> _uploadNewVideos() async {
-    if (_isUploading) return;
+    if (mediaState.isUploading) return;
 
     setState(() {
-      _isUploading = true;
+      mediaState.isUploading = true;
     });
 
     try {
       final indicesToUpload = <int>[];
-      for (int i = _uploadedVideoUrls.length; i < _selectedVideos.length; i++) {
+      for (int i = mediaState.uploadedVideoUrls.length; i < mediaState.selectedVideos.length; i++) {
         indicesToUpload.add(i);
       }
 
@@ -548,7 +533,7 @@ class _CreateFeedPageState extends State<CreateFeedPage>
       for (int i in indicesToUpload) {
         if (!mounted) return;
 
-        final file = _selectedVideos[i];
+        final file = mediaState.selectedVideos[i];
 
         try {
           final exceedsSize = await _checkFileSize(file);
@@ -566,13 +551,13 @@ class _CreateFeedPageState extends State<CreateFeedPage>
 
           if (mounted) {
             setState(() {
-              _videoUploadingStatus[i] = true;
+              mediaState.videoUploadingStatus[i] = true;
             });
           }
 
           final currentTime = DateTime.now().microsecondsSinceEpoch.toString();
           String fileName =
-              '$currentTime${Path.basenameWithoutExtension(file.path)}.mp4';
+              '$currentTime${p.basenameWithoutExtension(file.path)}.mp4';
 
           UploadResult result = await UploadUtils.uploadFile(
             context: context,
@@ -584,8 +569,8 @@ class _CreateFeedPageState extends State<CreateFeedPage>
           if (result.isSuccess && result.url.isNotEmpty) {
             if (mounted) {
               setState(() {
-                _uploadedVideoUrls.add(result.url);
-                _videoUploadingStatus[i] = false;
+                mediaState.uploadedVideoUrls.add(result.url);
+                mediaState.videoUploadingStatus[i] = false;
               });
             }
           } else {
@@ -610,7 +595,7 @@ class _CreateFeedPageState extends State<CreateFeedPage>
     } finally {
       if (mounted) {
         setState(() {
-          _isUploading = false;
+          mediaState.isUploading = false;
         });
       }
     }
@@ -623,10 +608,10 @@ class _CreateFeedPageState extends State<CreateFeedPage>
     return WillPopScope(
       onWillPop: () async {
         if (_controller.text.isEmpty &&
-            _selectedImages.isEmpty &&
-            _selectedVideos.isEmpty &&
-            _uploadedImageUrls.isEmpty &&
-            _uploadedVideoUrls.isEmpty) {
+            mediaState.selectedImages.isEmpty &&
+            mediaState.selectedVideos.isEmpty &&
+            mediaState.uploadedImageUrls.isEmpty &&
+            mediaState.uploadedVideoUrls.isEmpty) {
           return true;
         }
 
@@ -665,14 +650,14 @@ class _CreateFeedPageState extends State<CreateFeedPage>
             child: Material(
               color: Colors.transparent,
               child: InkWell(
-                onTap: _isAnyUploading() ? null : _postMoment,
+                onTap: isAnyUploading() ? null : _postMoment,
                 borderRadius: BorderRadius.circular(20),
                 child: Container(
                   decoration: BoxDecoration(
                     gradient:
-                        _isAnyUploading() ? null : getBrandGradientHorizontal(),
+                        isAnyUploading() ? null : getBrandGradientHorizontal(),
                     color:
-                        _isAnyUploading()
+                        isAnyUploading()
                             ? theme.colorScheme.outline.withOpacity(0.3)
                             : null,
                     borderRadius: BorderRadius.circular(20),
@@ -687,7 +672,7 @@ class _CreateFeedPageState extends State<CreateFeedPage>
                       fontSize: 16,
                       fontWeight: FontWeight.w600,
                       color:
-                          _isAnyUploading()
+                          isAnyUploading()
                               ? theme.colorScheme.onSurface.withOpacity(0.5)
                               : Colors.white,
                     ),
@@ -787,7 +772,7 @@ class _CreateFeedPageState extends State<CreateFeedPage>
   }
 
   Widget _buildMediaToolbar() {
-    if (_selectedVideos.isNotEmpty) {
+    if (mediaState.selectedVideos.isNotEmpty) {
       return const SizedBox();
     }
 
@@ -804,7 +789,7 @@ class _CreateFeedPageState extends State<CreateFeedPage>
   Widget _buildMediaButtons() {
     final theme = Theme.of(context);
 
-    final bool hideVideoButton = _selectedImages.isNotEmpty;
+    final bool hideVideoButton = mediaState.selectedImages.isNotEmpty;
 
     return Row(
       mainAxisAlignment: MainAxisAlignment.end,
@@ -874,9 +859,9 @@ class _CreateFeedPageState extends State<CreateFeedPage>
   }
 
   Widget _buildImageDisplayArea() {
-    if (_selectedImages.isEmpty && _uploadedImageUrls.isEmpty) return const SizedBox();
+    if (mediaState.selectedImages.isEmpty && mediaState.uploadedImageUrls.isEmpty) return const SizedBox();
 
-    if (_selectedImages.isEmpty && _uploadedImageUrls.isNotEmpty) {
+    if (mediaState.selectedImages.isEmpty && mediaState.uploadedImageUrls.isNotEmpty) {
       return _buildUploadedImagesDisplay();
     }
 
@@ -894,9 +879,9 @@ class _CreateFeedPageState extends State<CreateFeedPage>
               );
             },
             child:
-                _selectedImages.length == 1
+                mediaState.selectedImages.length == 1
                     ? _buildSingleImage(
-                      _selectedImages[0],
+                      mediaState.selectedImages[0],
                       0,
                       key: const ValueKey('single'),
                     )
@@ -912,8 +897,8 @@ class _CreateFeedPageState extends State<CreateFeedPage>
       padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(12),
-        child: _uploadedImageUrls.length == 1
-            ? _buildSingleUploadedImage(_uploadedImageUrls[0], 0)
+        child: mediaState.uploadedImageUrls.length == 1
+            ? _buildSingleUploadedImage(mediaState.uploadedImageUrls[0], 0)
             : _buildUploadedImageCarousel(),
       ),
     );
@@ -947,36 +932,7 @@ class _CreateFeedPageState extends State<CreateFeedPage>
             ),
           ),
         ),
-        Positioned(
-          bottom: 8,
-          left: 20,
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            decoration: BoxDecoration(
-              color: Colors.black54,
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  width: 16,
-                  height: 16,
-                  decoration: const BoxDecoration(
-                    color: Colors.green,
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(Icons.check, color: Colors.white, size: 12),
-                ),
-                const SizedBox(width: 4),
-                const Text(
-                  'Uploaded',
-                  style: TextStyle(color: Colors.white, fontSize: 11),
-                ),
-              ],
-            ),
-          ),
-        ),
+        const UploadStatusBadge(text: 'Uploaded', left: 20),
       ],
     );
   }
@@ -986,14 +942,14 @@ class _CreateFeedPageState extends State<CreateFeedPage>
       height: 200,
       child: ListView.builder(
         scrollDirection: Axis.horizontal,
-        itemCount: _uploadedImageUrls.length,
+        itemCount: mediaState.uploadedImageUrls.length,
         itemBuilder: (context, index) {
           return Padding(
             padding: EdgeInsets.only(
               left: index == 0 ? 0 : 8,
-              right: index == _uploadedImageUrls.length - 1 ? 0 : 8,
+              right: index == mediaState.uploadedImageUrls.length - 1 ? 0 : 8,
             ),
-            child: _buildSingleUploadedImage(_uploadedImageUrls[index], index),
+            child: _buildSingleUploadedImage(mediaState.uploadedImageUrls[index], index),
           );
         },
       ),
@@ -1002,14 +958,14 @@ class _CreateFeedPageState extends State<CreateFeedPage>
 
   void _removeUploadedImage(int index) {
     setState(() {
-      _uploadedImageUrls.removeAt(index);
+      mediaState.uploadedImageUrls.removeAt(index);
     });
   }
 
   Widget _buildVideoDisplayArea() {
-    if (_selectedVideos.isEmpty && _uploadedVideoUrls.isEmpty) return const SizedBox();
+    if (mediaState.selectedVideos.isEmpty && mediaState.uploadedVideoUrls.isEmpty) return const SizedBox();
 
-    if (_selectedVideos.isEmpty && _uploadedVideoUrls.isNotEmpty) {
+    if (mediaState.selectedVideos.isEmpty && mediaState.uploadedVideoUrls.isNotEmpty) {
       return _buildUploadedVideosDisplay();
     }
 
@@ -1028,9 +984,9 @@ class _CreateFeedPageState extends State<CreateFeedPage>
               );
             },
             child:
-                _selectedVideos.length == 1
+                mediaState.selectedVideos.length == 1
                     ? _buildSingleVideo(
-                      _selectedVideos[0],
+                      mediaState.selectedVideos[0],
                       0,
                       key: const ValueKey('single_video'),
                     )
@@ -1046,8 +1002,8 @@ class _CreateFeedPageState extends State<CreateFeedPage>
       padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(12),
-        child: _uploadedVideoUrls.length == 1
-            ? _buildSingleUploadedVideo(_uploadedVideoUrls[0], 0)
+        child: mediaState.uploadedVideoUrls.length == 1
+            ? _buildSingleUploadedVideo(mediaState.uploadedVideoUrls[0], 0)
             : _buildUploadedVideoCarousel(),
       ),
     );
@@ -1098,36 +1054,7 @@ class _CreateFeedPageState extends State<CreateFeedPage>
             ),
           ),
         ),
-        Positioned(
-          bottom: 8,
-          left: 20,
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            decoration: BoxDecoration(
-              color: Colors.black54,
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  width: 16,
-                  height: 16,
-                  decoration: const BoxDecoration(
-                    color: Colors.green,
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(Icons.check, color: Colors.white, size: 12),
-                ),
-                const SizedBox(width: 4),
-                const Text(
-                  'Uploaded',
-                  style: TextStyle(color: Colors.white, fontSize: 11),
-                ),
-              ],
-            ),
-          ),
-        ),
+        const UploadStatusBadge(text: 'Uploaded', left: 20),
       ],
     );
   }
@@ -1137,14 +1064,14 @@ class _CreateFeedPageState extends State<CreateFeedPage>
       height: 200,
       child: ListView.builder(
         scrollDirection: Axis.horizontal,
-        itemCount: _uploadedVideoUrls.length,
+        itemCount: mediaState.uploadedVideoUrls.length,
         itemBuilder: (context, index) {
           return Padding(
             padding: EdgeInsets.only(
               left: index == 0 ? 0 : 8,
-              right: index == _uploadedVideoUrls.length - 1 ? 0 : 8,
+              right: index == mediaState.uploadedVideoUrls.length - 1 ? 0 : 8,
             ),
-            child: _buildSingleUploadedVideo(_uploadedVideoUrls[index], index),
+            child: _buildSingleUploadedVideo(mediaState.uploadedVideoUrls[index], index),
           );
         },
       ),
@@ -1153,13 +1080,13 @@ class _CreateFeedPageState extends State<CreateFeedPage>
 
   void _removeUploadedVideo(int index) {
     setState(() {
-      _uploadedVideoUrls.removeAt(index);
+      mediaState.uploadedVideoUrls.removeAt(index);
     });
   }
 
   Widget _buildSingleImage(File image, int index, {required Key key}) {
-    final isUploaded = index < _uploadedImageUrls.length;
-    final isUploading = _uploadingStatus[index] ?? false;
+    final isUploaded = index < mediaState.uploadedImageUrls.length;
+    final isUploading = mediaState.imageUploadingStatus[index] ?? false;
 
     return Stack(
       key: key,
@@ -1201,42 +1128,7 @@ class _CreateFeedPageState extends State<CreateFeedPage>
           ),
         ),
         if (isUploaded)
-          Positioned(
-            bottom: 8,
-            left: 20,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              decoration: BoxDecoration(
-                color: Colors.black54,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
-                    width: 16,
-                    height: 16,
-                    decoration: BoxDecoration(
-                      color: kGreen,
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    child: Center(
-                      child: Icon(Icons.check, color: Colors.white, size: 12),
-                    ),
-                  ),
-                  const SizedBox(width: 6),
-                  Text(
-                    'Uploaded',
-                    style: GoogleFonts.inter(
-                      color: Colors.white,
-                      fontSize: 10,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
+          const UploadStatusBadge(text: 'Uploaded', left: 20),
       ],
     );
   }
@@ -1248,11 +1140,11 @@ class _CreateFeedPageState extends State<CreateFeedPage>
       child: ListView.builder(
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: 12),
-        itemCount: _selectedImages.length,
+        itemCount: mediaState.selectedImages.length,
         itemBuilder: (context, index) {
-          final image = _selectedImages[index];
-          final isUploaded = index < _uploadedImageUrls.length;
-          final isUploading = _uploadingStatus[index] ?? false;
+          final image = mediaState.selectedImages[index];
+          final isUploaded = index < mediaState.uploadedImageUrls.length;
+          final isUploading = mediaState.imageUploadingStatus[index] ?? false;
 
           return Stack(
             children: [
@@ -1288,34 +1180,7 @@ class _CreateFeedPageState extends State<CreateFeedPage>
                         ),
                       ),
                     if (isUploaded)
-                      Positioned(
-                        bottom: 8,
-                        left: 8,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 6,
-                            vertical: 3,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.green,
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: const Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(Icons.check, color: Colors.white, size: 10),
-                              SizedBox(width: 2),
-                              Text(
-                                'Done',
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 8,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
+                      const UploadStatusBadge(text: 'Done'),
                   ],
                 ),
               ),
@@ -1340,9 +1205,9 @@ class _CreateFeedPageState extends State<CreateFeedPage>
   }
 
   Widget _buildSingleVideo(File video, int index, {required Key key}) {
-    final isUploaded = index < _uploadedVideoUrls.length;
-    final isUploading = _videoUploadingStatus[index] ?? false;
-    final thumbnail = _videoThumbnails[index];
+    final isUploaded = index < mediaState.uploadedVideoUrls.length;
+    final isUploading = mediaState.videoUploadingStatus[index] ?? false;
+    final thumbnail = mediaState.videoThumbnails[index];
 
     return Stack(
       key: key,
@@ -1403,42 +1268,7 @@ class _CreateFeedPageState extends State<CreateFeedPage>
           ),
         ),
         if (isUploaded)
-          Positioned(
-            bottom: 8,
-            left: 16,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              decoration: BoxDecoration(
-                color: Colors.black54,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
-                    width: 16,
-                    height: 16,
-                    decoration: BoxDecoration(
-                      color: kGreen,
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    child: Center(
-                      child: Icon(Icons.check, color: Colors.white, size: 12),
-                    ),
-                  ),
-                  const SizedBox(width: 6),
-                  Text(
-                    'Uploaded',
-                    style: GoogleFonts.inter(
-                      color: Colors.white,
-                      fontSize: 10,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
+          const UploadStatusBadge(text: 'Uploaded', left: 16),
       ],
     );
   }
@@ -1450,11 +1280,11 @@ class _CreateFeedPageState extends State<CreateFeedPage>
       child: ListView.builder(
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: 12),
-        itemCount: _selectedVideos.length,
+        itemCount: mediaState.selectedVideos.length,
         itemBuilder: (context, index) {
-          final isUploaded = index < _uploadedVideoUrls.length;
-          final isUploading = _videoUploadingStatus[index] ?? false;
-          final thumbnail = _videoThumbnails[index];
+          final isUploaded = index < mediaState.uploadedVideoUrls.length;
+          final isUploading = mediaState.videoUploadingStatus[index] ?? false;
+          final thumbnail = mediaState.videoThumbnails[index];
 
           return Stack(
             children: [
@@ -1507,34 +1337,7 @@ class _CreateFeedPageState extends State<CreateFeedPage>
                         ),
                       ),
                     if (isUploaded)
-                      Positioned(
-                        bottom: 8,
-                        left: 8,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 6,
-                            vertical: 3,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.green,
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: const Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(Icons.check, color: Colors.white, size: 10),
-                              SizedBox(width: 2),
-                              Text(
-                                'Done',
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 8,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
+                      const UploadStatusBadge(text: 'Done'),
                   ],
                 ),
               ),
@@ -1565,24 +1368,24 @@ class _CreateFeedPageState extends State<CreateFeedPage>
     ChuChuLoading.show();
 
     try {
-      if (_selectedImages.isNotEmpty &&
-          _uploadedImageUrls.length < _selectedImages.length) {
+      if (mediaState.selectedImages.isNotEmpty &&
+          mediaState.uploadedImageUrls.length < mediaState.selectedImages.length) {
         await _uploadNewImages();
       }
 
-      if (_selectedVideos.isNotEmpty &&
-          _uploadedVideoUrls.length < _selectedVideos.length) {
+      if (mediaState.selectedVideos.isNotEmpty &&
+          mediaState.uploadedVideoUrls.length < mediaState.selectedVideos.length) {
         await _uploadNewVideos();
       }
 
       final inputText = _controller.text;
 
       String mediaContent = '';
-      if (_uploadedImageUrls.isNotEmpty) {
-        mediaContent += ' ${_uploadedImageUrls.join(' ')}';
+      if (mediaState.uploadedImageUrls.isNotEmpty) {
+        mediaContent += ' ${mediaState.uploadedImageUrls.join(' ')}';
       }
-      if (_uploadedVideoUrls.isNotEmpty) {
-        mediaContent += ' ${_uploadedVideoUrls.join(' ')}';
+      if (mediaState.uploadedVideoUrls.isNotEmpty) {
+        mediaContent += ' ${mediaState.uploadedVideoUrls.join(' ')}';
       }
 
       String content =
@@ -1620,9 +1423,9 @@ class _CreateFeedPageState extends State<CreateFeedPage>
       return file;
     }
 
-    final targetPath = Path.join(
-      Path.dirname(file.path),
-      '${Path.basenameWithoutExtension(file.path)}_noexif.jpg',
+    final targetPath = p.join(
+      p.dirname(file.path),
+      '${p.basenameWithoutExtension(file.path)}_noexif.jpg',
     );
 
     final result = await FlutterImageCompress.compressAndGetFile(
@@ -1682,13 +1485,13 @@ class _CreateFeedPageState extends State<CreateFeedPage>
 
   void _restoreMediaUrls(FeedDraftDBISAR draft) {
     if (draft.imageUrls != null && draft.imageUrls!.isNotEmpty) {
-      _uploadedImageUrls.clear();
-      _uploadedImageUrls.addAll(draft.imageUrls!);
+      mediaState.uploadedImageUrls.clear();
+      mediaState.uploadedImageUrls.addAll(draft.imageUrls!);
     }
 
     if (draft.videoUrls != null && draft.videoUrls!.isNotEmpty) {
-      _uploadedVideoUrls.clear();
-      _uploadedVideoUrls.addAll(draft.videoUrls!);
+      mediaState.uploadedVideoUrls.clear();
+      mediaState.uploadedVideoUrls.addAll(draft.videoUrls!);
     }
   }
 
@@ -1700,7 +1503,7 @@ class _CreateFeedPageState extends State<CreateFeedPage>
       }
 
       final content = _controller.text;
-      if (content.isEmpty && _uploadedImageUrls.isEmpty && _uploadedVideoUrls.isEmpty) {
+      if (content.isEmpty && mediaState.uploadedImageUrls.isEmpty && mediaState.uploadedVideoUrls.isEmpty) {
         await _deleteDraft();
         return;
       }
@@ -1728,8 +1531,8 @@ class _CreateFeedPageState extends State<CreateFeedPage>
       final draft = FeedDraftDBISAR(
         author: currentPubkey,
         content: content,
-        imageUrls: _uploadedImageUrls.isNotEmpty ? List<String>.from(_uploadedImageUrls) : null,
-        videoUrls: _uploadedVideoUrls.isNotEmpty ? List<String>.from(_uploadedVideoUrls) : null,
+        imageUrls: mediaState.uploadedImageUrls.isNotEmpty ? List<String>.from(mediaState.uploadedImageUrls) : null,
+        videoUrls: mediaState.uploadedVideoUrls.isNotEmpty ? List<String>.from(mediaState.uploadedVideoUrls) : null,
         draftCueUserMapJson: draftCueUserMapJson,
         updatedAt: DateTime.now().millisecondsSinceEpoch,
       );
@@ -1761,10 +1564,10 @@ class _CreateFeedPageState extends State<CreateFeedPage>
 
   void _handleCancel() async {
     if (_controller.text.isEmpty &&
-        _selectedImages.isEmpty &&
-        _selectedVideos.isEmpty &&
-        _uploadedImageUrls.isEmpty &&
-        _uploadedVideoUrls.isEmpty) {
+        mediaState.selectedImages.isEmpty &&
+        mediaState.selectedVideos.isEmpty &&
+        mediaState.uploadedImageUrls.isEmpty &&
+        mediaState.uploadedVideoUrls.isEmpty) {
       Navigator.pop(context);
       return;
     }
