@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../theme/app_theme.dart';
 import 'common_toast.dart';
+import 'gradient_button.dart';
 
 class CommonEditFieldDialog extends StatefulWidget {
   final String title;
@@ -241,51 +242,14 @@ class _CommonEditFieldDialogState extends State<CommonEditFieldDialog> {
                       SizedBox(width: 12),
                       // Save button with gradient
                       Expanded(
-                        child: Container(
-                          decoration: BoxDecoration(
-                            gradient: _isSaving ? null : getBrandGradient(),
-                            color: _isSaving ? Colors.grey[300] : null,
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Material(
-                            color: Colors.transparent,
-                            child: InkWell(
-                              onTap: _isSaving ? null : _handleSave,
-                              borderRadius: BorderRadius.circular(12),
-                              child: Container(
-                                padding: EdgeInsets.symmetric(vertical: 16),
-                                alignment: Alignment.center,
-                                child:
-                                    _isSaving
-                                        ? SizedBox(
-                                          width: 20,
-                                          height: 20,
-                                          child: CircularProgressIndicator(
-                                            strokeWidth: 2,
-                                            valueColor:
-                                                AlwaysStoppedAnimation<Color>(
-                                                  Colors.white,
-                                                ),
-                                          ),
-                                        )
-                                        : Row(
-                                          mainAxisAlignment:
-                                              MainAxisAlignment.center,
-                                          children: [
-                                            Text(
-                                              'Save',
-                                              style: GoogleFonts.inter(
-                                                fontSize: 16,
-                                                fontWeight: FontWeight.w700,
-                                                color: Colors.white,
-                                              ),
-                                            ),
-                                            SizedBox(width: 4),
-                                          ],
-                                        ),
-                              ),
-                            ),
-                          ),
+                        child: GradientButton(
+                          text: 'Save',
+                          onTap: _handleSave,
+                          isLoading: _isSaving,
+                          borderRadius: 12,
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          fontWeight: FontWeight.w700,
+                          gradientStyle: GradientButtonStyle.vertical,
                         ),
                       ),
                     ],

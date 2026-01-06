@@ -29,6 +29,7 @@ import '../../../core/media/media_upload_mixin.dart';
 import '../../../core/media/widgets/media_toolbar_widget.dart';
 import '../../../core/media/widgets/image_display_widget.dart';
 import '../../../core/media/widgets/video_display_widget.dart';
+import '../../../core/widgets/gradient_button.dart';
 
 class FeedReplyPage extends StatefulWidget {
   final NotedUIModel notedUIModel;
@@ -101,38 +102,10 @@ class _FeedReplyPageState extends State<FeedReplyPage>
         actions: [
           Padding(
             padding: const EdgeInsets.only(right: 12),
-            child: Material(
-              color: Colors.transparent,
-              child: InkWell(
-                onTap: isAnyUploading() ? null : _postMoment,
-                borderRadius: BorderRadius.circular(20),
-                child: Container(
-                  decoration: BoxDecoration(
-                    gradient:
-                        isAnyUploading() ? null : getBrandGradientHorizontal(),
-                    color:
-                        isAnyUploading()
-                            ? theme.colorScheme.outline.withOpacity(0.3)
-                            : null,
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 24,
-                    vertical: 8,
-                  ),
-                  child: Text(
-                    'Publish',
-                    style: GoogleFonts.inter(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                      color:
-                          isAnyUploading()
-                              ? theme.colorScheme.onSurface.withOpacity(0.5)
-                              : Colors.white,
-                    ),
-                  ),
-                ),
-              ),
+            child: GradientButton(
+              text: 'Publish',
+              onTap: _postMoment,
+              isDisabled: isAnyUploading(),
             ),
           ),
         ],

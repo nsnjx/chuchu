@@ -23,6 +23,7 @@ import '../../../core/account/web_file_registry_stub.dart'
 import 'package:google_fonts/google_fonts.dart';
 import '../../../core/theme/app_theme.dart';
 import 'package:flutter/services.dart';
+import '../../../core/widgets/gradient_button.dart';
 
 class ProfileEditPage extends StatefulWidget {
   final RelayGroupDBISAR relayGroup;
@@ -238,30 +239,13 @@ class _ProfileEditPageState extends State<ProfileEditPage>
           ),
           SizedBox(width: 12),
           // Confirm button
-          GestureDetector(
+          GradientButton(
+            text: 'Confirm',
             onTap: _confirmCoverPhotoUpload,
-            child: Container(
-              padding: EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-              decoration: BoxDecoration(
-                gradient: getBrandGradient(),
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.check, size: 18, color: Colors.white),
-                    SizedBox(width: 8),
-                    Text(
-                    'Confirm',
-                      style: GoogleFonts.inter(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.white,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+            icon: const Icon(Icons.check, size: 18, color: Colors.white),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            fontSize: 14,
+            gradientStyle: GradientButtonStyle.vertical,
           ),
         ],
       );

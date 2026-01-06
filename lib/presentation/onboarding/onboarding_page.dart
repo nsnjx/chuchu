@@ -2,6 +2,7 @@ import 'package:chuchu/core/widgets/common_image.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../core/theme/app_theme.dart';
+import '../../core/widgets/gradient_button.dart';
 import '../login/pages/new_login_page.dart';
 
 class OnboardingPage extends StatefulWidget {
@@ -211,44 +212,14 @@ class _OnboardingPageState extends State<OnboardingPage> {
           ),
           SizedBox(height: 24),
           // Next/Get Started button
-          Container(
+          GradientButton(
+            text: isLastPage ? 'Get Started' : 'Next',
+            onTap: _nextPage,
+            trailingIcon: CommonImage(iconName: 'arrow_right_icon.png', size: 20, color: Colors.white),
             width: double.infinity,
             height: 50,
-            child: Material(
-              color: Colors.transparent,
-              child: InkWell(
-                onTap: _nextPage,
-                borderRadius: BorderRadius.circular(25),
-                child: Container(
-                  decoration: BoxDecoration(
-                    gradient: getBrandGradientHorizontal(),
-                    borderRadius: BorderRadius.circular(25),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.15),
-                        blurRadius: 8,
-                        offset: Offset(0, 4),
-                      ),
-                    ],
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text(
-                        isLastPage ? 'Get Started' : 'Next',
-                        style: GoogleFonts.inter(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w800,
-                          color: Colors.white,
-                        ),
-                      ),
-                      SizedBox(width: 8),
-                      CommonImage(iconName: 'arrow_right_icon.png', size: 20, color: Colors.white,),
-                    ],
-                  ),
-                ),
-              ),
-            ),
+            borderRadius: 25,
+            fontWeight: FontWeight.w800,
           ),
         ],
       ),

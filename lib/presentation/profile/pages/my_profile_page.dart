@@ -31,6 +31,7 @@ import '../../../core/utils/ui_refresh_mixin.dart';
 import '../../../core/widgets/logout_confirm_dialog.dart';
 import '../../login/pages/new_login_page.dart';
 import '../../nostrKey/pages/nostr_key_page.dart';
+import '../../../core/widgets/gradient_button.dart';
 
 class MyProfilePage extends StatefulWidget {
   const MyProfilePage({super.key});
@@ -310,32 +311,12 @@ class _MyProfilePageState extends State<MyProfilePage>
                   ),
                 ),
                 const SizedBox(width: 12),
-                Container(
-                  decoration: BoxDecoration(
-                    gradient: getBrandGradientHorizontal(),
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Material(
-                    color: Colors.transparent,
-                    child: InkWell(
-                    onTap: _confirmAvatarUpdate,
-                      borderRadius: BorderRadius.circular(20),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 20,
-                          vertical: 8,
-                        ),
-                    child: Text(
-                      'Confirm',
-                      style: GoogleFonts.inter(
-                            color: Colors.white,
-                        fontSize: 14,
-                        fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
+                GradientButton(
+                  text: 'Confirm',
+                  onTap: _confirmAvatarUpdate,
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                  fontSize: 14,
+                  fontWeight: FontWeight.w800,
                 ),
               ],
             )

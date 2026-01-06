@@ -7,6 +7,7 @@ import '../../core/manager/chuchu_user_info_manager.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/utils/navigator/navigator.dart';
 import '../../presentation/login/pages/new_login_page.dart';
+import 'gradient_button.dart';
 
 /// Logout confirmation dialog widget
 /// A reusable dialog for confirming user logout with warning message
@@ -138,85 +139,69 @@ class LogoutConfirmDialog {
                         ),
                         const SizedBox(width: 12),
                         Expanded(
-                          child: Container(
+                          child: SizedBox(
                             height: 50,
-                            child: Material(
-                              color: Colors.transparent,
-                              borderRadius: BorderRadius.circular(18),
-                              child: InkWell(
-                                onTap: () async {
-                                  // Close dialog first
+                            child: GradientButton(
+                              text: 'Logout',
+                              onTap: () async {
+                                // Close dialog first
+                                Navigator.of(context).pop();
+
+                                // Wait a frame to ensure dialog is closed
+                                await Future.delayed(
+                                  const Duration(milliseconds: 100),
+                                );
+
+                                // Close drawer if still open and closeDrawer is true
+                                if (closeDrawer &&
+                                    Navigator.of(context).canPop()) {
                                   Navigator.of(context).pop();
+                                }
 
-                                  // Wait a frame to ensure dialog is closed
-                                  await Future.delayed(
-                                    const Duration(milliseconds: 100),
-                                  );
+                                // Wait another frame to ensure drawer is closed
+                                await Future.delayed(
+                                  const Duration(milliseconds: 100),
+                                );
 
-                                  // Close drawer if still open and closeDrawer is true
-                                  if (closeDrawer &&
-                                      Navigator.of(context).canPop()) {
-                                    Navigator.of(context).pop();
-                                  }
+                                // Save user pubkey (clear it)
+                                await ChuChuCacheManager.defaultOXCacheManager
+                                    .saveForeverData(
+                                      StorageKeyTool.CHUCHU_USER_PUBKEY,
+                                      '',
+                                    );
 
-                                  // Wait another frame to ensure drawer is closed
-                                  await Future.delayed(
-                                    const Duration(milliseconds: 100),
-                                  );
+                                // Perform logout
+                                await ChuChuUserInfoManager.sharedInstance
+                                    .logout(needObserver: true);
 
-                                  // Save user pubkey (clear it)
-                                  await ChuChuCacheManager.defaultOXCacheManager
-                                      .saveForeverData(
-                                        StorageKeyTool.CHUCHU_USER_PUBKEY,
-                                        '',
-                                      );
-
-                                  // Perform logout
-                                  await ChuChuUserInfoManager.sharedInstance
-                                      .logout(needObserver: true);
-
-                                  // Navigate to login page and clear entire navigation stack
-                                  // Use global navigator key to ensure we navigate from root context
-                                  final navigatorContext =
-                                      ChuChuNavigator
-                                          .navigatorKey
-                                          .currentContext ??
-                                      context;
-                                  Navigator.of(
-                                    navigatorContext,
-                                  ).pushAndRemoveUntil(
-                                    MaterialPageRoute(
-                                      builder:
-                                          (context) => const NewLoginPage(),
-                                    ),
-                                    (route) =>
-                                        false, // Remove all previous routes
-                                  );
-
-                                  // Call optional callback
-                                  onLogoutComplete?.call();
-                                },
-                                borderRadius: BorderRadius.circular(14),
-                                child: Container(
-                                  decoration: BoxDecoration(
-                                    gradient: getBrandGradientHorizontal(),
-                                    borderRadius: BorderRadius.circular(14),
+                                // Navigate to login page and clear entire navigation stack
+                                // Use global navigator key to ensure we navigate from root context
+                                final navigatorContext =
+                                    ChuChuNavigator
+                                        .navigatorKey
+                                        .currentContext ??
+                                    context;
+                                Navigator.of(
+                                  navigatorContext,
+                                ).pushAndRemoveUntil(
+                                  MaterialPageRoute(
+                                    builder:
+                                        (context) => const NewLoginPage(),
                                   ),
-                                  padding: EdgeInsets.symmetric(
-                                    horizontal: 24,
-                                    vertical: 16,
-                                  ),
-                                  alignment: Alignment.center,
-                                  child: Text(
-                                    'Logout',
-                                    style: GoogleFonts.inter(
-                                      color: Colors.white,
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.w800,
-                                    ),
-                                  ),
-                                ),
+                                  (route) =>
+                                      false, // Remove all previous routes
+                                );
+
+                                // Call optional callback
+                                onLogoutComplete?.call();
+                              },
+                              borderRadius: 14,
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 24,
+                                vertical: 16,
                               ),
+                              fontSize: 14,
+                              fontWeight: FontWeight.w800,
                             ),
                           ),
                         ),

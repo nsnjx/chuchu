@@ -40,6 +40,7 @@ import 'package:path/path.dart' as p;
 // Media upload components
 import '../../../core/media/media_state.dart';
 import '../../../core/media/widgets/upload_status_badge.dart';
+import '../../../core/widgets/gradient_button.dart';
 
 class CreateFeedPage extends StatefulWidget {
   final NotedUIModel? notedUIModel;
@@ -192,43 +193,18 @@ class _CreateFeedPageState extends State<CreateFeedPage>
                         ),
                         const SizedBox(width: 12),
                         Expanded(
-                          child: Container(
+                          child: SizedBox(
                             height: 50,
-                            child: Material(
-                              color: Colors.transparent,
-                              borderRadius: BorderRadius.circular(18),
-                              child: InkWell(
-                                onTap: () {
-                                  Navigator.of(context).pop(true);
-                                },
-                                borderRadius: BorderRadius.circular(14),
-                                child: Container(
-                                  decoration: BoxDecoration(
-                                    gradient: getBrandGradientHorizontal(),
-                                    borderRadius: BorderRadius.circular(14),
-                                    boxShadow: [
-                                      BoxShadow(
-                                        color: Colors.black.withOpacity(0.15),
-                                        blurRadius: 4,
-                                        offset: const Offset(0, 2),
-                                      ),
-                                    ],
-                                  ),
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 24,
-                                    vertical: 16,
-                                  ),
-                                  alignment: Alignment.center,
-                                  child: Text(
-                                    'Save',
-                                    style: GoogleFonts.inter(
-                                      color: Colors.white,
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.w800,
-                                    ),
-                                  ),
-                                ),
+                            child: GradientButton(
+                              text: 'Save',
+                              onTap: () => Navigator.of(context).pop(true),
+                              borderRadius: 14,
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 24,
+                                vertical: 16,
                               ),
+                              fontSize: 14,
+                              fontWeight: FontWeight.w800,
                             ),
                           ),
                         ),
@@ -647,38 +623,10 @@ class _CreateFeedPageState extends State<CreateFeedPage>
         actions: [
           Padding(
             padding: const EdgeInsets.only(right: 12),
-            child: Material(
-              color: Colors.transparent,
-              child: InkWell(
-                onTap: isAnyUploading() ? null : _postMoment,
-                borderRadius: BorderRadius.circular(20),
-                child: Container(
-                  decoration: BoxDecoration(
-                    gradient:
-                        isAnyUploading() ? null : getBrandGradientHorizontal(),
-                    color:
-                        isAnyUploading()
-                            ? theme.colorScheme.outline.withOpacity(0.3)
-                            : null,
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 24,
-                    vertical: 8,
-                  ),
-                  child: Text(
-                    'Publish',
-                    style: GoogleFonts.inter(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                      color:
-                          isAnyUploading()
-                              ? theme.colorScheme.onSurface.withOpacity(0.5)
-                              : Colors.white,
-                    ),
-                  ),
-                ),
-              ),
+            child: GradientButton(
+              text: 'Publish',
+              onTap: _postMoment,
+              isDisabled: isAnyUploading(),
             ),
           ),
         ],
