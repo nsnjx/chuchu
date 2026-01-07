@@ -57,6 +57,8 @@ class GradientButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
+    final bool hasFixedSize = width != null || height != null;
+
     Widget content = isLoading
         ? SizedBox(
             width: 20,
@@ -68,9 +70,7 @@ class GradientButton extends StatelessWidget {
               ),
             ),
           )
-        : _buildContent(theme);
-
-    final bool hasFixedSize = width != null || height != null;
+        : _buildContent(theme, hasFixedSize);
 
     return SizedBox(
       width: width,
@@ -104,7 +104,7 @@ class GradientButton extends StatelessWidget {
     );
   }
 
-  Widget _buildContent(ThemeData theme) {
+  Widget _buildContent(ThemeData theme, bool hasFixedSize) {
     final textWidget = Text(
       text,
       textAlign: TextAlign.center,
@@ -133,7 +133,8 @@ class GradientButton extends StatelessWidget {
       );
     }
 
-    return Center(child: textWidget);
+    // Only use Center when fixed size is specified, otherwise let content determine size
+    return hasFixedSize ? Center(child: textWidget) : textWidget;
   }
 }
 
