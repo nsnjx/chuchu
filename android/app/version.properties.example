@@ -1,0 +1,7 @@
+# Example version configuration file
+# Copy this to version.properties and modify as needed
+# Or set VERSION_NAME and VERSION_CODE environment variables
+
+versionName=0.1.0
+versionCode=5
+

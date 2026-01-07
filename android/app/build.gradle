@@ -12,6 +12,15 @@ if (localPropertiesFile.exists()) {
     }
 }
 
+// Load version properties from version.properties (for dynamic version configuration)
+def versionProperties = new Properties()
+def versionPropertiesFile = rootProject.file('app/version.properties')
+if (versionPropertiesFile.exists()) {
+    versionPropertiesFile.withReader('UTF-8') { reader ->
+        versionProperties.load(reader)
+    }
+}
+
 // Load keystore properties for signing
 def keystoreProperties = new Properties()
 def keystorePropertiesFile = rootProject.file('app/key.properties')
@@ -19,6 +28,21 @@ if (keystorePropertiesFile.exists()) {
     keystorePropertiesFile.withReader('UTF-8') { reader ->
         keystoreProperties.load(reader)
     }
+}
+
+// Get version from multiple sources (priority: version.properties > local.properties > environment > default)
+def getVersionName() {
+    return versionProperties.getProperty('versionName') 
+        ?: localProperties.getProperty('flutter.versionName')
+        ?: System.getenv('VERSION_NAME')
+        ?: '0.1.0'
+}
+
+def getVersionCode() {
+    def code = versionProperties.getProperty('versionCode')
+        ?: localProperties.getProperty('flutter.versionCode')
+        ?: System.getenv('VERSION_CODE')
+    return code ? code.toInteger() : 5
 }
 
 
@@ -32,8 +56,8 @@ android {
         applicationId "com.chuchu"
         minSdk 26
         targetSdk 36
-        versionCode 5
-        versionName "0.1.0"
+        versionCode getVersionCode()
+        versionName getVersionName()
         multiDexEnabled true
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         // Note: abiFilters removed to avoid conflict with split-per-abi builds

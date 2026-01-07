@@ -32,6 +32,7 @@ import '../../../core/widgets/logout_confirm_dialog.dart';
 import '../../login/pages/new_login_page.dart';
 import '../../nostrKey/pages/nostr_key_page.dart';
 import '../../../core/widgets/gradient_button.dart';
+import '../../../core/config/app_version.dart';
 
 class MyProfilePage extends StatefulWidget {
   const MyProfilePage({super.key});
@@ -151,12 +152,18 @@ class _MyProfilePageState extends State<MyProfilePage>
   }
 
   Widget _buildVersionInfo() {
-    return Text(
-      'Version 0.0.3',
-      style: GoogleFonts.inter(
-        fontSize: 14,
-        color: Theme.of(context).colorScheme.outline,
-      ),
+    return FutureBuilder<String>(
+      future: AppVersion.getDisplayVersion(),
+      builder: (context, snapshot) {
+        final version = snapshot.data ?? 'Version 0.0.0';
+        return Text(
+          version,
+          style: GoogleFonts.inter(
+            fontSize: 14,
+            color: Theme.of(context).colorScheme.outline,
+          ),
+        );
+      },
     );
   }
 
