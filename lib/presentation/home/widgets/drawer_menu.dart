@@ -293,145 +293,146 @@ class _DrawerMenuState extends State<DrawerMenu>
             Expanded(
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12),
-
-                child: Column(
-                  children: [
-                    _menuItem(
-                      context,
-                      'post_bg_icon.png',
-                      "My Posts",
-                      onTap: () {
-                        Navigator.of(context).pop();
-                        RelayGroupDBISAR? myRelayGroup =
-                            RelayGroup
-                                .sharedInstance
-                                .myGroups[Account.sharedInstance.currentPubkey]
-                                ?.value;
-                        if (myRelayGroup == null) {
-                          FeedWidgetsUtils.showBecomeCreatorDialog(
-                            context,
-                            callback: () {
-                              Navigator.of(context).pop();
-                              Navigator.of(context).push(
-                                FeedWidgetsUtils.createSlideTransition(
-                                  pageBuilder:
-                                      (
-                                        context,
-                                        animation,
-                                        secondaryAnimation,
-                                      ) => CreateCreatorPage(),
-                                ),
-                              );
-                            },
-                          );
-                          return;
-                        }
-                        ChuChuNavigator.pushPage(
-                          context,
-                          (context) =>
-                              FeedPersonalPage(relayGroupDB: myRelayGroup),
-                        );
-                      },
-                    ),
-                    _menuItem(
-                      context,
-                      'share_bg_icon.png',
-                      "Share Profile",
-                      onTap: () {
-                        Navigator.of(context).pop();
-                        final currentPubkey = ChuChuUserInfoManager.sharedInstance.currentUserInfo?.pubKey;
-                        if (currentPubkey != null && currentPubkey.isNotEmpty) {
+                child: SingleChildScrollView(
+                  child: Column(
+                    children: [
+                      _menuItem(
+                        context,
+                        'post_bg_icon.png',
+                        "My Posts",
+                        onTap: () {
+                          Navigator.of(context).pop();
+                          RelayGroupDBISAR? myRelayGroup =
+                              RelayGroup
+                                  .sharedInstance
+                                  .myGroups[Account.sharedInstance.currentPubkey]
+                                  ?.value;
+                          if (myRelayGroup == null) {
+                            FeedWidgetsUtils.showBecomeCreatorDialog(
+                              context,
+                              callback: () {
+                                Navigator.of(context).pop();
+                                Navigator.of(context).push(
+                                  FeedWidgetsUtils.createSlideTransition(
+                                    pageBuilder:
+                                        (
+                                          context,
+                                          animation,
+                                          secondaryAnimation,
+                                        ) => CreateCreatorPage(),
+                                  ),
+                                );
+                              },
+                            );
+                            return;
+                          }
                           ChuChuNavigator.pushPage(
                             context,
-                            (context) => ShareProfilePage(pubkey: currentPubkey),
+                            (context) =>
+                                FeedPersonalPage(relayGroupDB: myRelayGroup),
                           );
-                        }
-                      },
-                    ),
-                    _menuItem(
-                      context,
-                      'wallet_bg_icon.png',
-                      "Wallet",
-                      onTap: () {
-                        Navigator.of(context).pop();
-                        ChuChuNavigator.pushPage(
-                          context,
-                          (context) => WalletPage(),
-                        );
-                      },
-                    ),
-                    _menuItem(
-                      context,
-                      'search_bg_icon.png',
-                      "Search",
-                      onTap: () {
-                        Navigator.of(context).pop();
-                        ChuChuNavigator.pushPage(
-                          context,
-                          (context) => SearchPage(),
-                        );
-                      },
-                    ),
-                    _menuItem(
-                      context,
-                      'bookmarks_bg_icon.png',
-                      "Bookmarks",
-                      onTap: () {
-                        Navigator.of(context).pop();
-                        ChuChuNavigator.pushPage(
-                          context,
-                          (context) => BookmarksPage(),
-                        );
-                      },
-                    ),
+                        },
+                      ),
+                      _menuItem(
+                        context,
+                        'share_bg_icon.png',
+                        "Share Profile",
+                        onTap: () {
+                          Navigator.of(context).pop();
+                          final currentPubkey = ChuChuUserInfoManager.sharedInstance.currentUserInfo?.pubKey;
+                          if (currentPubkey != null && currentPubkey.isNotEmpty) {
+                            ChuChuNavigator.pushPage(
+                              context,
+                              (context) => ShareProfilePage(pubkey: currentPubkey),
+                            );
+                          }
+                        },
+                      ),
+                      _menuItem(
+                        context,
+                        'wallet_bg_icon.png',
+                        "Wallet",
+                        onTap: () {
+                          Navigator.of(context).pop();
+                          ChuChuNavigator.pushPage(
+                            context,
+                            (context) => WalletPage(),
+                          );
+                        },
+                      ),
+                      _menuItem(
+                        context,
+                        'search_bg_icon.png',
+                        "Search",
+                        onTap: () {
+                          Navigator.of(context).pop();
+                          ChuChuNavigator.pushPage(
+                            context,
+                            (context) => SearchPage(),
+                          );
+                        },
+                      ),
+                      _menuItem(
+                        context,
+                        'bookmarks_bg_icon.png',
+                        "Bookmarks",
+                        onTap: () {
+                          Navigator.of(context).pop();
+                          ChuChuNavigator.pushPage(
+                            context,
+                            (context) => BookmarksPage(),
+                          );
+                        },
+                      ),
 
-                    _menuItem(
-                      context,
-                      'settings_bg_icon.png',
-                      "Settings",
-                      onTap: () {
-                        // TODO: Navigate to settings page
-                        Navigator.of(context).pop(); // Close drawer first
-                        ChuChuNavigator.pushPage(
-                          context,
-                          (context) => const MyProfilePage(),
-                        );
-                      },
-                    ),
-                    // _menuItem(
-                    //   context,
-                    //   Icons.subscriptions,
-                    //   "Subscription Settings",
-                    //   onTap: () {
-                    //     Navigator.of(context).pop(); // Close drawer first
-                    //     ChuChuNavigator.pushPage(context, (context) => const SubscriptionSettingsPage());
-                    //   },
-                    // ),
-                    // _menuItem(
-                    //   context,
-                    //   Icons.star_outline,
-                    //   "Creator Center",
-                    //   onTap: () {
-                    //     Navigator.of(context).pop(); // Close drawer first
-                    //     ChuChuNavigator.pushPage(context, (context) => const CreateCreatorPage());
-                    //   },
-                    // ),
-                    const Spacer(),
-                    // Creator Pro upgrade box
-                    _buildCreatorProBox(context),
-                    Divider(color: theme.dividerColor.withOpacity(0.1)),
-                    _menuItem(
-                      context,
-                      Icons.logout,
-                      "Log Out",
-                      iconColor: theme.colorScheme.onSurfaceVariant,
-                      trailing: const SizedBox.shrink(),
-                      onTap: () {
-                        LogoutConfirmDialog.show(context, closeDrawer: true);
-                      },
-                    ),
-                    const SizedBox(height: 12),
-                  ],
+                      _menuItem(
+                        context,
+                        'settings_bg_icon.png',
+                        "Settings",
+                        onTap: () {
+                          // TODO: Navigate to settings page
+                          Navigator.of(context).pop(); // Close drawer first
+                          ChuChuNavigator.pushPage(
+                            context,
+                            (context) => const MyProfilePage(),
+                          );
+                        },
+                      ),
+                      // _menuItem(
+                      //   context,
+                      //   Icons.subscriptions,
+                      //   "Subscription Settings",
+                      //   onTap: () {
+                      //     Navigator.of(context).pop(); // Close drawer first
+                      //     ChuChuNavigator.pushPage(context, (context) => const SubscriptionSettingsPage());
+                      //   },
+                      // ),
+                      // _menuItem(
+                      //   context,
+                      //   Icons.star_outline,
+                      //   "Creator Center",
+                      //   onTap: () {
+                      //     Navigator.of(context).pop(); // Close drawer first
+                      //     ChuChuNavigator.pushPage(context, (context) => const CreateCreatorPage());
+                      //   },
+                      // ),
+                      const SizedBox(height: 16),
+                      // Creator Pro upgrade box
+                      _buildCreatorProBox(context),
+                      Divider(color: theme.dividerColor.withOpacity(0.1)),
+                      _menuItem(
+                        context,
+                        Icons.logout,
+                        "Log Out",
+                        iconColor: theme.colorScheme.onSurfaceVariant,
+                        trailing: const SizedBox.shrink(),
+                        onTap: () {
+                          LogoutConfirmDialog.show(context, closeDrawer: true);
+                        },
+                      ),
+                      const SizedBox(height: 12),
+                    ],
+                  ),
                 ),
               ),
             ),

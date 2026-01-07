@@ -107,6 +107,7 @@ class GradientButton extends StatelessWidget {
   Widget _buildContent(ThemeData theme) {
     final textWidget = Text(
       text,
+      textAlign: TextAlign.center,
       style: GoogleFonts.inter(
         fontSize: fontSize,
         fontWeight: fontWeight,
@@ -132,7 +133,7 @@ class GradientButton extends StatelessWidget {
       );
     }
 
-    return textWidget;
+    return Center(child: textWidget);
   }
 }
 
