@@ -36,6 +36,15 @@ class File {
   Future<dynamic> readAsBytes() async => _readBytes();
   dynamic readAsBytesSync() => _readBytes();
 
+  // Get file size in bytes
+  Future<int> length() async {
+    final data = web_file_registry.getWebFileData(path);
+    if (data == null) {
+      throw UnsupportedError('File operations not supported on web');
+    }
+    return data.length;
+  }
+
   Uint8List _readBytes() {
     final data = web_file_registry.getWebFileData(path);
     if (data == null) {
