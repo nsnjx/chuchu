@@ -7,7 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/services.dart';
 import 'dart:ui';
-import 'dart:io' show Platform;
+import 'dart:io' if (dart.library.html) 'package:chuchu/core/account/platform_stub.dart' show Platform;
 import '../../../core/account/account.dart';
 import '../../../core/relayGroups/model/relayGroupDB_isar.dart';
 import '../../../core/relayGroups/relayGroup.dart';

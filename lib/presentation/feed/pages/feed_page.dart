@@ -67,13 +67,18 @@ class _FeedPageState extends State<FeedPage>
   // Track processed note ids to prevent duplicate handling across callbacks
   final Set<String> _seenNoteIds = <String>{};
 
-  double avatarSize = 65;
-  double storyItemWidth = 65;
-  double storyItemHeight = 108;
+  double avatarSize = 56;
+  double storyItemWidth = 70;
+  static const double _textLineHeight = 16.0;
+  static const double _itemGap = 6.0;
+  static const double _topPadding = 0.0;
+  static const double _bottomPadding = 14.0;
+  static const double _borderWidth = 0.5;
 
-  static const double kStoriesSectionHeight = 120.0;
+  // Dynamic height calculation: avatar + gap + text + topPadding + bottomPadding + border
+  double get kStoriesSectionHeight => avatarSize + _itemGap + _textLineHeight + _topPadding + _bottomPadding + _borderWidth;
   bool _isStoriesVisible = true;
-  double _storiesHeight = kStoriesSectionHeight;
+  double get _storiesHeight => kStoriesSectionHeight;
 
   // Track if notes have been initialized to prevent duplicate loading
   bool _hasInitializedNotes = false;
@@ -215,12 +220,10 @@ class _FeedPageState extends State<FeedPage>
     if (scrollOffset > threshold && _isStoriesVisible) {
       setState(() {
         _isStoriesVisible = false;
-        _storiesHeight = 0.0;
       });
     } else if (scrollOffset <= threshold && !_isStoriesVisible) {
       setState(() {
         _isStoriesVisible = true;
-        _storiesHeight = kStoriesSectionHeight;
       });
     }
 
@@ -245,7 +248,6 @@ class _FeedPageState extends State<FeedPage>
     if (mounted) {
       setState(() {
         _isStoriesVisible = true;
-        _storiesHeight = kStoriesSectionHeight;
       });
     }
   }
@@ -424,76 +426,47 @@ class _FeedPageState extends State<FeedPage>
   }
 
   Widget _buildTopStoriesSection() {
+    final storiesContent = RepaintBoundary(
+      child: ListView.builder(
+        controller: storiesScrollController,
+        scrollDirection: Axis.horizontal,
+        padding: EdgeInsets.only(left: 16, right: 16, top: _topPadding, bottom: _bottomPadding),
+        itemCount: myGroupsList.length + 1,
+        itemBuilder: _buildStoryItemBuilder,
+      ),
+    );
+
+    final bottomBorder = BoxDecoration(
+      border: Border(
+        bottom: BorderSide(
+          color: Theme.of(context).dividerColor.withAlpha(80),
+          width: _borderWidth,
+        ),
+      ),
+    );
+
     // On Web platform, always show stories section (no animation)
     if (kIsWeb) {
       return Container(
         height: kStoriesSectionHeight,
-        child: ClipRect(
-          child: Container(
-            padding: EdgeInsets.only(bottom: 16),
-            margin: EdgeInsets.only(bottom: 16),
-            decoration: BoxDecoration(
-              border: Border(
-                bottom: BorderSide(
-                  color: Theme.of(context).dividerColor.withAlpha(80),
-                  width: 0.5,
-                ),
-              ),
-            ),
-            child: RepaintBoundary(
-              child: SizedBox(
-                height: kStoriesSectionHeight,
-                child: ListView.builder(
-                  controller: storiesScrollController,
-                  scrollDirection: Axis.horizontal,
-                  padding: EdgeInsets.symmetric(horizontal: 16),
-                  itemCount: myGroupsList.length + 1,
-                  itemBuilder: _buildStoryItemBuilder,
-                ),
-              ),
-            ),
-          ),
-        ),
+        margin: const EdgeInsets.only(bottom: 12),
+        decoration: bottomBorder,
+        child: storiesContent,
       );
     }
     
     // On other platforms, use animated version with scroll hide functionality
     return AnimatedSize(
-      duration: Duration(milliseconds: 300),
+      duration: const Duration(milliseconds: 300),
       curve: Curves.easeInOut,
       child: Container(
-        // color: Colors.red,
-        height: _storiesHeight,
-        child: ClipRect(
-          child: Container(
-            padding: EdgeInsets.only(bottom: 20),
-            // margin: EdgeInsets.only(bottom: 10),
-            decoration: BoxDecoration(
-              border: Border(
-                bottom: BorderSide(
-                  color: Theme.of(context).dividerColor.withAlpha(80),
-                  width: 0.5,
-                ),
-              ),
-            ),
-            child: _isStoriesVisible
-                ? RepaintBoundary(
-                    child: SizedBox(
-                      height: kStoriesSectionHeight,
-                      child: ListView.builder(
-                        controller: storiesScrollController,
-                        scrollDirection: Axis.horizontal,
-                        padding: EdgeInsets.symmetric(horizontal: 16),
-                        itemCount: myGroupsList.length + 1,
-                        itemBuilder: _buildStoryItemBuilder,
-                      ),
-                    ),
-                  )
-                : SizedBox.shrink(),
-          ),
-        ),
+        height: _isStoriesVisible ? _storiesHeight : 0,
+        margin: const EdgeInsets.only(bottom: 12),
+        decoration: bottomBorder,
+        clipBehavior: Clip.hardEdge,
+        child: _isStoriesVisible ? storiesContent : const SizedBox.shrink(),
       ),
-    ).setPadding(EdgeInsets.only(bottom: 20));
+    );
   }
 
   Widget _buildStoryItemBuilder(BuildContext context, int index) {
@@ -555,11 +528,9 @@ class _FeedPageState extends State<FeedPage>
     int noteCount = _notificationGroupNotes[relayGroup?.groupId]?.length ?? 0;
     return Container(
       width: storyItemWidth,
-      height: storyItemHeight,
       margin: EdgeInsets.only(right: marginRight),
       child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        crossAxisAlignment: CrossAxisAlignment.center,
+        mainAxisSize: MainAxisSize.min,
         children: [
           isAddButton
               ? _buildAddButton()
@@ -569,27 +540,28 @@ class _FeedPageState extends State<FeedPage>
               relayGroup?.groupId ?? '',
             ),
             builder: (context, user, child) {
-              return Center(
-                  child: StoryCircle(
+              return StoryCircle(
                     imageUrl: user.picture ?? '',
-                    size: avatarSize.toDouble(),
+                size: avatarSize,
                     segmentCount: noteCount > 0 ? noteCount : 0,
                     gapRatio: 0.1,
-                  )
               );
             },
           ),
-          const SizedBox(height: 6,),
-          Text(
-            relayGroup?.name ?? 'Add',
-            style: GoogleFonts.inter(
-              color: theme.colorScheme.onSurface,
-              fontSize: 12,
-              fontWeight: FontWeight.w500
+          SizedBox(height: _itemGap),
+          SizedBox(
+            height: _textLineHeight,
+            child: Text(
+              relayGroup?.name ?? 'Add',
+              style: GoogleFonts.inter(
+                color: theme.colorScheme.onSurface,
+                fontSize: 11,
+                fontWeight: FontWeight.w500,
+              ),
+              overflow: TextOverflow.ellipsis,
+              maxLines: 1,
+              textAlign: TextAlign.center,
             ),
-            overflow: TextOverflow.ellipsis,
-            maxLines: 1,
-            textAlign: TextAlign.center,
           ),
         ],
       ),
@@ -986,4 +958,7 @@ class _SegmentedBorderPainter extends CustomPainter {
     return true;
   }
 }
+
+
+
 
