@@ -181,28 +181,34 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
     // On web, use fixed sidebar layout; on mobile, use drawer
     if (kIsWeb) {
       return Scaffold(
-        body: Row(
-          children: [
-            // Fixed sidebar on the left for web
-            SizedBox(
-              width: 280,
-              child: DrawerMenu(
-                currentPage: _currentWebPage,
-                onWebPageChange: (page) {
-                  setState(() {
-                    _currentWebPage = page;
-                  });
-                  // Navigator is recreated with new key when page changes, so no need to reset
-                },
-              ),
+        body: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 880),
+            child: Row(
+              children: [
+                // Fixed sidebar on the left for web
+                SizedBox(
+                  width: 280,
+                  child: DrawerMenu(
+                    currentPage: _currentWebPage,
+                    onWebPageChange: (page) {
+                      setState(() {
+                        _currentWebPage = page;
+                      });
+                      // Navigator is recreated with new key when page changes, so no need to reset
+                    },
+                  ),
+                ),
+                // Main content area with max width constraint
+                SizedBox(
+                  width: 600,
+                  child: ClipRect(
+                    child: _buildWebContentPage(),
+                  ),
+                ),
+              ],
             ),
-            // Main content area with ClipRect to contain navigation
-            Expanded(
-              child: ClipRect(
-                child: _buildWebContentPage(),
-              ),
-            ),
-          ],
+          ),
         ),
       );
     }
