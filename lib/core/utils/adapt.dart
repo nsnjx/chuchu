@@ -1,6 +1,7 @@
 
 import 'dart:ui';
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 // Conditional import for Platform class
 import 'dart:io' if (dart.library.html) 'package:chuchu/core/account/platform_stub.dart' show Platform;
 
@@ -37,10 +38,12 @@ class Adapt {
     _textScaleFactor = mediaQuery?.textScaleFactor ?? _textScaleFactor;
 
     if (_width != null) {
-      if (Platform.isIOS && _width! > 375.0)
+      // On Web and iOS with larger screens, keep ratio at 1 to prevent oversized UI
+      if (kIsWeb || (Platform.isIOS && _width! > 375.0)) {
         _ratioW = 1;
-      else
+      } else {
         _ratioW = _width! / standardW;
+      }
     }
 
     if (_height != null) {

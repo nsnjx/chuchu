@@ -16,8 +16,6 @@ import 'transactions_page.dart';
 import '../../core/wallet/model/wallet_info.dart';
 import 'scan_qr_page.dart';
 
-/// Wallet Page
-/// Simple wallet interface navigated from profile page
 class WalletPage extends StatefulWidget {
   @override
   _WalletPageState createState() => _WalletPageState();
@@ -38,7 +36,6 @@ class _WalletPageState extends State<WalletPage> with ChuChuUIRefreshMixin {
 
   @override
   void dispose() {
-    // Cleanup wallet resources
     _wallet.dispose();
     super.dispose();
   }
@@ -58,7 +55,6 @@ class _WalletPageState extends State<WalletPage> with ChuChuUIRefreshMixin {
       }
     };
 
-    // Initialize wallet
     _initializeWallet();
   }
 
@@ -90,10 +86,10 @@ class _WalletPageState extends State<WalletPage> with ChuChuUIRefreshMixin {
   Future<void> _initializeWallet() async {
     try {
       await _wallet.init();
-      await _updateUsdValue(); // Update USD value after wallet initialization
-      await _updateTransactions(); // Load transactions including pending invoices
+      await _updateUsdValue();
+      await _updateTransactions();
       if (mounted) {
-        setState(() {}); // Refresh UI after wallet initialization
+        setState(() {});
       }
     } catch (e) {
       print('Failed to initialize wallet: $e');
@@ -141,7 +137,6 @@ class _WalletPageState extends State<WalletPage> with ChuChuUIRefreshMixin {
                 ),
               )
               : SingleChildScrollView(
-                // padding: EdgeInsets.all(12),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
@@ -158,10 +153,9 @@ class _WalletPageState extends State<WalletPage> with ChuChuUIRefreshMixin {
   Widget _buildBalanceCard() {
     WalletInfo? balance = _wallet.walletInfo;
     final theme = Theme.of(context);
-    // Show loading state if no balance data
     if (balance == null) {
       return AspectRatio(
-        aspectRatio: 1203 / 651, // Image aspect ratio
+        aspectRatio: 1203 / 651,
         child: Container(
           decoration: BoxDecoration(
             image: DecorationImage(
@@ -188,7 +182,6 @@ class _WalletPageState extends State<WalletPage> with ChuChuUIRefreshMixin {
         ),
       );
     }
-    //
     String formatBalance(int balance) {
       return balance.toString().replaceAllMapped(
         RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
@@ -197,7 +190,7 @@ class _WalletPageState extends State<WalletPage> with ChuChuUIRefreshMixin {
     }
 
     return AspectRatio(
-      aspectRatio: 1203 / 651, // Image aspect ratio
+      aspectRatio: 1203 / 651,
       child: Container(
         padding: EdgeInsets.only(top: 40),
         decoration: BoxDecoration(
@@ -285,7 +278,7 @@ class _WalletPageState extends State<WalletPage> with ChuChuUIRefreshMixin {
             child: _buildActionButton(
               'Scan',
               'scan_icon.png',
-              null, // Use gradient instead
+              null,
               Colors.white,
               theme.colorScheme.onSurface,
               () => _showScanDialog(),
@@ -323,7 +316,6 @@ class _WalletPageState extends State<WalletPage> with ChuChuUIRefreshMixin {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          // Icon container with background
           Container(
             width: 64,
             height: 64,
@@ -348,7 +340,6 @@ class _WalletPageState extends State<WalletPage> with ChuChuUIRefreshMixin {
             ),
           ),
           SizedBox(height: 8),
-          // Text label below icon
           Text(
             label,
             style: TextStyle(
@@ -369,7 +360,6 @@ class _WalletPageState extends State<WalletPage> with ChuChuUIRefreshMixin {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Header with icon and title
           Row(
             children: [
               Text(
@@ -406,7 +396,6 @@ class _WalletPageState extends State<WalletPage> with ChuChuUIRefreshMixin {
           ),
           SizedBox(height: 16),
 
-          // Transactions list or empty state
           if (_allTransactions.isEmpty)
             Container(
               width: double.infinity,
@@ -445,8 +434,6 @@ class _WalletPageState extends State<WalletPage> with ChuChuUIRefreshMixin {
                   BoxShadow(
                     color: Colors.black.withOpacity(0.1),
                     blurRadius: 2,
-                    // offset: Offset(0, 2),
-                    // spreadRadius: 0,
                   ),
                 ],
               ),
@@ -468,7 +455,7 @@ class _WalletPageState extends State<WalletPage> with ChuChuUIRefreshMixin {
                               height: 1,
                               thickness: 1,
                               color: theme.colorScheme.outline.withAlpha(10),
-                              indent: 80, // Start after icon and spacing
+                              indent: 80,
                             ),
                         ],
                       );
@@ -481,7 +468,6 @@ class _WalletPageState extends State<WalletPage> with ChuChuUIRefreshMixin {
   }
 
   Widget _buildTransactionItem(WalletTransaction tx) {
-    // Check if invoice is expired by parsing BOLT11 invoice
     bool isInvoiceExpired = false;
     if (tx.isIncoming && tx.invoice != null && tx.invoice!.isNotEmpty) {
       try {
@@ -489,7 +475,6 @@ class _WalletPageState extends State<WalletPage> with ChuChuUIRefreshMixin {
         final invoiceTimestamp = req.timestamp.toInt();
         int expiry = 0;
         
-        // Extract expiry from tags
         for (final tag in req.tags) {
           if (tag.type == 'expiry') {
             expiry = tag.data as int;
@@ -497,19 +482,15 @@ class _WalletPageState extends State<WalletPage> with ChuChuUIRefreshMixin {
           }
         }
         
-        // Calculate actual expiry time: timestamp + expiry (in seconds)
-        // If expiry is 0, default to 1 hour (3600 seconds)
         final invoiceExpiry = expiry > 0 ? expiry : 3600;
         final actualExpiresAt = invoiceTimestamp + invoiceExpiry;
         final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
         isInvoiceExpired = actualExpiresAt < now;
       } catch (e) {
-        // If parsing fails, don't mark as expired
         isInvoiceExpired = false;
       }
     }
     
-    // Determine display status: if invoice is expired, show "Expired", otherwise use transaction status
     final displayStatus = isInvoiceExpired ? TransactionStatus.expired : tx.status;
     
     String formatTimeAgo(int timestamp) {
@@ -537,7 +518,6 @@ class _WalletPageState extends State<WalletPage> with ChuChuUIRefreshMixin {
       );
     }
 
-    // Determine icon based on description
     IconData getTransactionIcon() {
       final desc = tx.description?.toLowerCase() ?? '';
       if (desc.contains('zap')) {
@@ -585,7 +565,6 @@ class _WalletPageState extends State<WalletPage> with ChuChuUIRefreshMixin {
           padding: EdgeInsets.all(16),
           child: Row(
             children: [
-              // Transaction icon
               Container(
                 width: 48,
                 height: 48,
@@ -601,7 +580,6 @@ class _WalletPageState extends State<WalletPage> with ChuChuUIRefreshMixin {
               ),
               SizedBox(width: 16),
 
-              // Transaction details
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -631,7 +609,6 @@ class _WalletPageState extends State<WalletPage> with ChuChuUIRefreshMixin {
                 ),
               ),
 
-              // Amount and status - vertical layout
               Column(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 mainAxisSize: MainAxisSize.min,
@@ -713,14 +690,9 @@ class _WalletPageState extends State<WalletPage> with ChuChuUIRefreshMixin {
     });
 
     try {
-      // Refresh balance and transactions
       await _wallet.refreshBalance();
       await _wallet.refreshTransactions();
-
-      // Also refresh invoice statuses
       await _wallet.refreshInvoiceStatuses();
-
-      // Update transactions list including pending invoices
       await _updateTransactions();
 
       if (mounted) {
@@ -775,7 +747,6 @@ class _WalletPageState extends State<WalletPage> with ChuChuUIRefreshMixin {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  // Header with icon
                   Row(
                     children: [
                       CommonImage(
@@ -784,7 +755,6 @@ class _WalletPageState extends State<WalletPage> with ChuChuUIRefreshMixin {
                         color: theme.colorScheme.primary,
                       ),
                       SizedBox(width: 12),
-                      // Title
                       Text(
                         'Send Payment',
                         style: GoogleFonts.inter(
@@ -797,7 +767,6 @@ class _WalletPageState extends State<WalletPage> with ChuChuUIRefreshMixin {
                   ),
                   SizedBox(height: 20),
 
-                  // Input field
                   Container(
                     decoration: BoxDecoration(
                       borderRadius: BorderRadius.circular(16),
@@ -886,7 +855,7 @@ class _WalletPageState extends State<WalletPage> with ChuChuUIRefreshMixin {
                         child: Container(
                           height: 50,
                           child: OutlinedButton(
-                            onPressed: () => Navigator.pop(context),
+                            onPressed: () => Navigator.of(context, rootNavigator: true).pop(),
                             style: OutlinedButton.styleFrom(
                               side: BorderSide(
                                 color: Color(0xFFE2E8F0),
@@ -965,9 +934,8 @@ class _WalletPageState extends State<WalletPage> with ChuChuUIRefreshMixin {
       return;
     }
 
-    Navigator.pop(context); // Close first dialog
+    Navigator.of(context, rootNavigator: true).pop();
 
-    // Show loading dialog while parsing
     _showBlurDialog(
       barrierDismissible: false,
       barrierLabel: 'Parsing Invoice Dialog',
@@ -985,13 +953,11 @@ class _WalletPageState extends State<WalletPage> with ChuChuUIRefreshMixin {
     );
 
     try {
-      // Parse invoice to get amount and description
       final invoiceData = await _wallet.parseInvoice(invoice);
 
-      Navigator.pop(context); // Close loading dialog
+      Navigator.of(context, rootNavigator: true).pop();
 
       if (invoiceData != null) {
-        // Check if invoice is expired
         if (invoiceData['expired'] == true) {
           CommonToast.instance.show(context, 'Invoice has expired', toastType: ToastType.failed);
         } else {
@@ -1001,7 +967,7 @@ class _WalletPageState extends State<WalletPage> with ChuChuUIRefreshMixin {
         CommonToast.instance.show(context, 'Failed to parse invoice', toastType: ToastType.failed);
       }
     } catch (e) {
-      Navigator.pop(context); // Close loading dialog
+      Navigator.of(context, rootNavigator: true).pop();
 
       CommonToast.instance.show(context, 'Error parsing invoice: $e', toastType: ToastType.failed);
     }
@@ -1042,7 +1008,6 @@ class _WalletPageState extends State<WalletPage> with ChuChuUIRefreshMixin {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  // Header with icon
                   Row(
                     children: [
                       Icon(
@@ -1051,7 +1016,6 @@ class _WalletPageState extends State<WalletPage> with ChuChuUIRefreshMixin {
                         color: Colors.orange[600],
                       ),
                       SizedBox(width: 12),
-                      // Title
                       Text(
                         'Confirm Payment',
                         style: GoogleFonts.inter(
@@ -1064,14 +1028,12 @@ class _WalletPageState extends State<WalletPage> with ChuChuUIRefreshMixin {
                   ),
                   SizedBox(height: 20),
 
-                  // Payment details card
                   Container(
                     decoration: BoxDecoration(
                       borderRadius: BorderRadius.circular(16),
                     ),
                     child: Column(
                       children: [
-                        // Amount field
                         Container(
                           padding: EdgeInsets.all(20),
                           decoration: BoxDecoration(
@@ -1081,10 +1043,6 @@ class _WalletPageState extends State<WalletPage> with ChuChuUIRefreshMixin {
                               color: Color(0xFFF1F5F9),
                               width: 1,
                             ),
-                            // border: Border.all(
-                            //   color: Colors.grey[200]!,
-                            //   width: 1,
-                            // ),
                           ),
                           child: Row(
                             children: [
@@ -1220,7 +1178,7 @@ class _WalletPageState extends State<WalletPage> with ChuChuUIRefreshMixin {
                       Container(
                         height: 50,
                         child: OutlinedButton(
-                          onPressed: () => Navigator.pop(context),
+                          onPressed: () => Navigator.of(context, rootNavigator: true).pop(),
                           style: OutlinedButton.styleFrom(
                             side: BorderSide(
                               color: Color(0xFFE2E8F0),
@@ -1288,9 +1246,8 @@ class _WalletPageState extends State<WalletPage> with ChuChuUIRefreshMixin {
   }
 
   Future<void> _sendPayment(String invoice, String description) async {
-    Navigator.pop(context); // Close confirm dialog
+    Navigator.of(context, rootNavigator: true).pop();
 
-    // Show loading dialog
     _showBlurDialog(
       barrierDismissible: false,
       barrierLabel: 'Sending Payment Dialog',
@@ -1313,18 +1270,18 @@ class _WalletPageState extends State<WalletPage> with ChuChuUIRefreshMixin {
         description: description,
       );
 
-      Navigator.pop(context); // Close loading dialog
+      Navigator.of(context, rootNavigator: true).pop();
 
       if (transaction != null) {
         CommonToast.instance.show(context, 'Payment sent successfully!', toastType: ToastType.success);
         if (mounted) {
-          setState(() {}); // Refresh UI
+          setState(() {});
         }
       } else {
         CommonToast.instance.show(context, 'Payment failed', toastType: ToastType.failed);
       }
     } catch (e) {
-      Navigator.pop(context); // Close loading dialog
+      Navigator.of(context, rootNavigator: true).pop();
 
       CommonToast.instance.show(context, 'Payment error: $e', toastType: ToastType.failed);
     }
@@ -1367,7 +1324,6 @@ class _WalletPageState extends State<WalletPage> with ChuChuUIRefreshMixin {
                     children: [
                       CommonImage(iconName: 'qr_code_icon.png', size: 24),
                       SizedBox(width: 12),
-                      // Title
                       Text(
                         'Create Invoice',
                         style: GoogleFonts.inter(
@@ -1380,19 +1336,10 @@ class _WalletPageState extends State<WalletPage> with ChuChuUIRefreshMixin {
                   ),
                   SizedBox(height: 20),
 
-                  // Amount input field
                   Container(
                     decoration: BoxDecoration(
                       borderRadius: BorderRadius.circular(16),
                       color: kBgLight,
-                      // boxShadow: [
-                      //   BoxShadow(
-                      //     color: Colors.grey.withOpacity(0.1),
-                      //     spreadRadius: 1,
-                      //     blurRadius: 8,
-                      //     offset: Offset(0, 2),
-                      //   ),
-                      // ],
                     ),
                     child: TextField(
                       controller: amountController,
@@ -1448,19 +1395,10 @@ class _WalletPageState extends State<WalletPage> with ChuChuUIRefreshMixin {
 
                   SizedBox(height: 16),
 
-                  // Description input field
                   Container(
                     decoration: BoxDecoration(
                       borderRadius: BorderRadius.circular(16),
                       color: kBgLight,
-                      // boxShadow: [
-                      //   // BoxShadow(
-                      //   //   color: Colors.grey.withOpacity(0.1),
-                      //   //   spreadRadius: 1,
-                      //   //   blurRadius: 8,
-                      //   //   offset: Offset(0, 2),
-                      //   // ),
-                      // ],
                     ),
                     child: TextField(
                       controller: descriptionController,
@@ -1539,7 +1477,7 @@ class _WalletPageState extends State<WalletPage> with ChuChuUIRefreshMixin {
                         child: Container(
                           height: 50,
                           child: OutlinedButton(
-                            onPressed: () => Navigator.pop(context),
+                            onPressed: () => Navigator.of(context, rootNavigator: true).pop(),
                             style: OutlinedButton.styleFrom(
                               side: BorderSide(
                                 color: Color(0xFFE2E8F0),
@@ -1629,9 +1567,8 @@ class _WalletPageState extends State<WalletPage> with ChuChuUIRefreshMixin {
       return;
     }
 
-    Navigator.pop(context); // Close dialog
+    Navigator.of(context, rootNavigator: true).pop();
 
-    // Show loading dialog
     _showBlurDialog(
       barrierDismissible: false,
       barrierLabel: 'Creating Invoice Dialog',
@@ -1667,7 +1604,7 @@ class _WalletPageState extends State<WalletPage> with ChuChuUIRefreshMixin {
         description: description.isEmpty ? null : description,
       );
 
-      Navigator.pop(context); // Close loading dialog
+      Navigator.of(context, rootNavigator: true).pop();
 
       if (invoice != null) {
         _showInvoiceDialog(invoice);
@@ -1675,9 +1612,8 @@ class _WalletPageState extends State<WalletPage> with ChuChuUIRefreshMixin {
         CommonToast.instance.show(context, 'Failed to create invoice', toastType: ToastType.failed);
       }
     } catch (e) {
-      Navigator.pop(context); // Close loading dialog
+      Navigator.of(context, rootNavigator: true).pop();
 
-      // Check if error is rate-limited
       final errorString = e.toString().toLowerCase();
       if (errorString.contains('rate-limited') || errorString.contains('slow down')) {
         CommonToast.instance.show(context, 'Rate limit reached. Please try again later.', toastType: ToastType.failed);
@@ -1949,7 +1885,7 @@ class _WalletPageState extends State<WalletPage> with ChuChuUIRefreshMixin {
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () => Navigator.of(context, rootNavigator: true).pop(),
             child: Text(
               'Close',
               style: GoogleFonts.inter(
@@ -1984,13 +1920,13 @@ class _WalletPageState extends State<WalletPage> with ChuChuUIRefreshMixin {
   }) {
     return showGeneralDialog<T>(
       context: context,
+      useRootNavigator: true,
       barrierDismissible: barrierDismissible,
       barrierLabel: barrierLabel,
       barrierColor: Colors.transparent,
       pageBuilder: (context, anim1, anim2) {
         return Stack(
           children: [
-            // Background blur layer - first in Stack (bottom layer)
             Positioned.fill(
               child: ClipRect(
                 child: BackdropFilter(
@@ -1999,7 +1935,6 @@ class _WalletPageState extends State<WalletPage> with ChuChuUIRefreshMixin {
                 ),
               ),
             ),
-            // Dialog content - last in Stack (top layer)
             Center(
               child: SafeArea(
                 child: Material(
@@ -2016,7 +1951,6 @@ class _WalletPageState extends State<WalletPage> with ChuChuUIRefreshMixin {
     );
   }
 
-  /// Copy text to clipboard
   Future<void> _copyToClipboard(String text) async {
     try {
       await Clipboard.setData(ClipboardData(text: text));
@@ -2027,15 +1961,12 @@ class _WalletPageState extends State<WalletPage> with ChuChuUIRefreshMixin {
   }
 
   void _showScanDialog() async {
-    // Navigate to QR scanner page
     final String? scannedInvoice = await Navigator.push<String>(
       context,
       MaterialPageRoute(builder: (context) => ScanQRPage()),
     );
 
-    // If invoice was scanned, process it
     if (scannedInvoice != null && scannedInvoice.isNotEmpty) {
-      // Parse and confirm payment
       await _parseInvoiceAndConfirm(scannedInvoice);
     }
   }
