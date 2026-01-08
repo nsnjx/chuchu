@@ -1,6 +1,7 @@
 import 'package:chuchu/core/relayGroups/model/relayGroupDB_isar.dart';
 import 'package:chuchu/core/utils/navigator/navigator.dart';
 import 'package:chuchu/core/utils/widget_tool_utils.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -24,8 +25,29 @@ import '../../search/pages/search_page.dart';
 import '../../wallet/wallet_page.dart';
 import '../../feed/pages/bookmarks_page.dart';
 
+/// Enum representing different content pages for web layout
+enum WebContentPage {
+  home,
+  myPosts,
+  shareProfile,
+  wallet,
+  search,
+  bookmarks,
+  settings,
+}
+
 class DrawerMenu extends StatefulWidget {
-  const DrawerMenu({super.key});
+  /// Callback for web layout to switch content page without navigation
+  final void Function(WebContentPage page)? onWebPageChange;
+  
+  /// Currently selected page (for highlighting in web layout)
+  final WebContentPage? currentPage;
+
+  const DrawerMenu({
+    super.key,
+    this.onWebPageChange,
+    this.currentPage,
+  });
 
   @override
   State createState() => _DrawerMenuState();
@@ -63,6 +85,18 @@ class _DrawerMenuState extends State<DrawerMenu>
     CommonToast.instance.show(context, 'Copied to clipboard', toastType: ToastType.success);
   }
 
+  /// Handle menu item tap - use callback for web, navigation for mobile
+  void _handleMenuTap(WebContentPage page, VoidCallback mobileAction) {
+    if (kIsWeb && widget.onWebPageChange != null) {
+      // On web, use callback to switch content without navigation
+      widget.onWebPageChange!(page);
+    } else {
+      // On mobile, close drawer and navigate
+      Navigator.of(context).pop();
+      mobileAction();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     UserDBISAR? userInfo = ChuChuUserInfoManager.sharedInstance.currentUserInfo;
@@ -72,13 +106,18 @@ class _DrawerMenuState extends State<DrawerMenu>
       nikName = _getUserNupbStr;
     }
     final theme = Theme.of(context);
+    // On web, no border radius (flat sidebar); on mobile, rounded corners for drawer
+    final borderRadius = kIsWeb
+        ? BorderRadius.zero
+        : BorderRadius.only(
+            topLeft: Radius.circular(20),
+            bottomLeft: Radius.circular(20),
+          );
+
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.only(
-          topLeft: Radius.circular(20),
-          bottomLeft: Radius.circular(20),
-        ),
+        borderRadius: borderRadius,
       ),
       child: SafeArea(
         top: false,
@@ -98,9 +137,11 @@ class _DrawerMenuState extends State<DrawerMenu>
                     right: 16,
                   ),
                   decoration: BoxDecoration(
-                    borderRadius: BorderRadius.only(
-                      topLeft: Radius.circular(20),
-                    ),
+                    borderRadius: kIsWeb
+                        ? BorderRadius.zero
+                        : BorderRadius.only(
+                            topLeft: Radius.circular(20),
+                          ),
                     gradient: LinearGradient(
                       begin: Alignment.topLeft,
                       end: Alignment.bottomRight,
@@ -300,36 +341,52 @@ class _DrawerMenuState extends State<DrawerMenu>
                         context,
                         'post_bg_icon.png',
                         "My Posts",
+                        isSelected: widget.currentPage == WebContentPage.myPosts,
                         onTap: () {
-                          Navigator.of(context).pop();
+                          // Check if user is a creator first
                           RelayGroupDBISAR? myRelayGroup =
                               RelayGroup
                                   .sharedInstance
                                   .myGroups[Account.sharedInstance.currentPubkey]
                                   ?.value;
                           if (myRelayGroup == null) {
+                            // Show become creator dialog for both web and mobile
                             FeedWidgetsUtils.showBecomeCreatorDialog(
                               context,
                               callback: () {
-                                Navigator.of(context).pop();
-                                Navigator.of(context).push(
-                                  FeedWidgetsUtils.createSlideTransition(
-                                    pageBuilder:
-                                        (
-                                          context,
-                                          animation,
-                                          secondaryAnimation,
-                                        ) => CreateCreatorPage(),
-                                  ),
-                                );
+                                Navigator.of(context, rootNavigator: true).pop();
+                                if (kIsWeb) {
+                                  // On web, navigate using root navigator
+                                  Navigator.of(context, rootNavigator: true).push(
+                                    FeedWidgetsUtils.createSlideTransition(
+                                      pageBuilder:
+                                          (context, animation, secondaryAnimation) =>
+                                              CreateCreatorPage(),
+                                    ),
+                                  );
+                                } else {
+                                  Navigator.of(context).push(
+                                    FeedWidgetsUtils.createSlideTransition(
+                                      pageBuilder:
+                                          (context, animation, secondaryAnimation) =>
+                                              CreateCreatorPage(),
+                                    ),
+                                  );
+                                }
                               },
                             );
                             return;
                           }
-                          ChuChuNavigator.pushPage(
-                            context,
-                            (context) =>
-                                FeedPersonalPage(relayGroupDB: myRelayGroup),
+                          // User is a creator, proceed with page switch
+                          _handleMenuTap(
+                            WebContentPage.myPosts,
+                            () {
+                              ChuChuNavigator.pushPage(
+                                context,
+                                (context) =>
+                                    FeedPersonalPage(relayGroupDB: myRelayGroup),
+                              );
+                            },
                           );
                         },
                       ),
@@ -337,66 +394,80 @@ class _DrawerMenuState extends State<DrawerMenu>
                         context,
                         'share_bg_icon.png',
                         "Share Profile",
-                        onTap: () {
-                          Navigator.of(context).pop();
-                          final currentPubkey = ChuChuUserInfoManager.sharedInstance.currentUserInfo?.pubKey;
-                          if (currentPubkey != null && currentPubkey.isNotEmpty) {
-                            ChuChuNavigator.pushPage(
-                              context,
-                              (context) => ShareProfilePage(pubkey: currentPubkey),
-                            );
-                          }
-                        },
+                        isSelected: widget.currentPage == WebContentPage.shareProfile,
+                        onTap: () => _handleMenuTap(
+                          WebContentPage.shareProfile,
+                          () {
+                            final currentPubkey = ChuChuUserInfoManager.sharedInstance.currentUserInfo?.pubKey;
+                            if (currentPubkey != null && currentPubkey.isNotEmpty) {
+                              ChuChuNavigator.pushPage(
+                                context,
+                                (context) => ShareProfilePage(pubkey: currentPubkey),
+                              );
+                            }
+                          },
+                        ),
                       ),
                       _menuItem(
                         context,
                         'wallet_bg_icon.png',
                         "Wallet",
-                        onTap: () {
-                          Navigator.of(context).pop();
-                          ChuChuNavigator.pushPage(
-                            context,
-                            (context) => WalletPage(),
-                          );
-                        },
+                        isSelected: widget.currentPage == WebContentPage.wallet,
+                        onTap: () => _handleMenuTap(
+                          WebContentPage.wallet,
+                          () {
+                            ChuChuNavigator.pushPage(
+                              context,
+                              (context) => WalletPage(),
+                            );
+                          },
+                        ),
                       ),
                       _menuItem(
                         context,
                         'search_bg_icon.png',
                         "Search",
-                        onTap: () {
-                          Navigator.of(context).pop();
-                          ChuChuNavigator.pushPage(
-                            context,
-                            (context) => SearchPage(),
-                          );
-                        },
+                        isSelected: widget.currentPage == WebContentPage.search,
+                        onTap: () => _handleMenuTap(
+                          WebContentPage.search,
+                          () {
+                            ChuChuNavigator.pushPage(
+                              context,
+                              (context) => SearchPage(),
+                            );
+                          },
+                        ),
                       ),
                       _menuItem(
                         context,
                         'bookmarks_bg_icon.png',
                         "Bookmarks",
-                        onTap: () {
-                          Navigator.of(context).pop();
-                          ChuChuNavigator.pushPage(
-                            context,
-                            (context) => BookmarksPage(),
-                          );
-                        },
+                        isSelected: widget.currentPage == WebContentPage.bookmarks,
+                        onTap: () => _handleMenuTap(
+                          WebContentPage.bookmarks,
+                          () {
+                            ChuChuNavigator.pushPage(
+                              context,
+                              (context) => BookmarksPage(),
+                            );
+                          },
+                        ),
                       ),
 
                       _menuItem(
                         context,
                         'settings_bg_icon.png',
                         "Settings",
-                        onTap: () {
-                          // TODO: Navigate to settings page
-                          Navigator.of(context).pop(); // Close drawer first
-                          ChuChuNavigator.pushPage(
-                            context,
-                            (context) => const MyProfilePage(),
-                          );
-                        },
+                        isSelected: widget.currentPage == WebContentPage.settings,
+                        onTap: () => _handleMenuTap(
+                          WebContentPage.settings,
+                          () {
+                            ChuChuNavigator.pushPage(
+                              context,
+                              (context) => const MyProfilePage(),
+                            );
+                          },
+                        ),
                       ),
                       // _menuItem(
                       //   context,
@@ -478,13 +549,24 @@ class _DrawerMenuState extends State<DrawerMenu>
           'Become a creator to publish content and earn subscription revenue.';
       buttonText = 'Become Creator';
       onButtonTap = () {
-        Navigator.of(context).pop();
-        Navigator.of(context).push(
-          FeedWidgetsUtils.createSlideTransition(
-            pageBuilder:
-                (context, animation, secondaryAnimation) => CreateCreatorPage(),
-          ),
-        );
+        if (kIsWeb) {
+          // On web, sidebar is fixed, use root navigator to push page
+          Navigator.of(context, rootNavigator: true).push(
+            FeedWidgetsUtils.createSlideTransition(
+              pageBuilder:
+                  (context, animation, secondaryAnimation) => CreateCreatorPage(),
+            ),
+          );
+        } else {
+          // On mobile, close drawer first then navigate
+          Navigator.of(context).pop();
+          Navigator.of(context).push(
+            FeedWidgetsUtils.createSlideTransition(
+              pageBuilder:
+                  (context, animation, secondaryAnimation) => CreateCreatorPage(),
+            ),
+          );
+        }
       };
     }
 
@@ -573,15 +655,26 @@ class _DrawerMenuState extends State<DrawerMenu>
     dynamic icon,
     String title, {
     bool bold = true,
+    bool isSelected = false,
     Widget? trailing,
     Color? iconColor,
     VoidCallback? onTap,
   }) {
     final theme = Theme.of(context);
+    // Highlight selected item on web
+    final isHighlighted = kIsWeb && isSelected;
+    
     return InkWell(
       onTap: onTap,
-      child: Padding(
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
         padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 10),
+        decoration: isHighlighted
+            ? BoxDecoration(
+                color: kPrimary.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(12),
+              )
+            : null,
         child: Row(
           children: [
             icon is String
@@ -598,13 +691,13 @@ class _DrawerMenuState extends State<DrawerMenu>
                 style: TextStyle(
                   fontWeight: bold ? FontWeight.bold : FontWeight.normal,
                   fontSize: 14,
-                  color: theme.colorScheme.onSurface,
+                  color: isHighlighted ? kPrimary : theme.colorScheme.onSurface,
                 ),
               ),
             ),
             if (trailing != null)
               trailing
-            else
+            else if (!kIsWeb) // Hide chevron on web
               Icon(
                 Icons.chevron_right,
                 size: 20,

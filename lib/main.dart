@@ -3,7 +3,6 @@ import 'dart:async';
 
 import 'package:chuchu/presentation/splash/splash_page.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:app_links/app_links.dart';
 import 'package:nostr_core_dart/src/nips/nip_019.dart';
 
@@ -23,7 +22,6 @@ import 'package:google_fonts/google_fonts.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  // Prevent runtime font fetching (e.g., fonts.gstatic.com) to avoid network errors.
   GoogleFonts.config.allowRuntimeFetching = false;
   
   try {
@@ -222,17 +220,7 @@ class MainState extends State<MainApp> with WidgetsBindingObserver {
     final easyLoadingBuilder = ChuChuLoading.init();
     widget = easyLoadingBuilder(context, widget);
     
-    // Apply web layout constraints
-    if (kIsWeb) {
-      // Wrap in Center and ConstrainedBox for simple width limiting
-      // This approach is safer and avoids constraint conflicts
-      widget = Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 500),
-          child: widget,
-        ),
-      );
-    }
+
     
     return widget;
   }

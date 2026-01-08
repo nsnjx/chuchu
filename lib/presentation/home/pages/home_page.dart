@@ -18,6 +18,13 @@ import '../../creator/pages/create_creator_page.dart';
 
 import '../widgets/drawer_menu.dart';
 import '../../feed/pages/feed_page.dart';
+import '../../feed/pages/feed_personal_page.dart';
+import '../../feed/pages/bookmarks_page.dart';
+import '../../profile/pages/my_profile_page.dart';
+import '../../profile/pages/share_profile_page.dart';
+import '../../search/pages/search_page.dart';
+import '../../wallet/wallet_page.dart';
+import '../../../core/manager/chuchu_user_info_manager.dart';
 import '../../../core/manager/chuchu_feed_manager.dart';
 import '../../../core/feed/model/notificationDB_isar.dart';
 import '../../../core/feed/model/noteDB_isar.dart';
@@ -70,6 +77,9 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
   bool _isScrolled = false;
   bool _hasNotifications = false;
   BottomNavItem _currentTab = BottomNavItem.home;
+  
+  // Web content page state
+  WebContentPage _currentWebPage = WebContentPage.home;
 
   bool get isOpen => _controller.value == 1.0;
 
@@ -168,19 +178,183 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
 
   @override
   Widget buildBody(BuildContext context) {
+    // On web, use fixed sidebar layout; on mobile, use drawer
+    if (kIsWeb) {
+      return Scaffold(
+        body: Row(
+          children: [
+            // Fixed sidebar on the left for web
+            SizedBox(
+              width: 280,
+              child: DrawerMenu(
+                currentPage: _currentWebPage,
+                onWebPageChange: (page) {
+                  setState(() {
+                    _currentWebPage = page;
+                  });
+                  // Navigator is recreated with new key when page changes, so no need to reset
+                },
+              ),
+            ),
+            // Main content area with ClipRect to contain navigation
+            Expanded(
+              child: ClipRect(
+                child: _buildWebContentPage(),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+    
+    // Mobile layout with drawer
     return Scaffold(
       appBar: _buildAppBar(context),
-
       body: Stack(
         children: [
           _buildCurrentPage(),
-
           Align(
             alignment: Alignment.bottomCenter,
             child: _buildBottomNavigationBar(context),
           ),
         ],
       ),
+    );
+  }
+  
+  /// Build content page for web based on current selected page
+  Widget _buildWebContentPage() {
+    switch (_currentWebPage) {
+      case WebContentPage.home:
+        return Scaffold(
+          appBar: _buildAppBar(context),
+          body: Stack(
+            children: [
+              _buildCurrentPage(),
+              Align(
+                alignment: Alignment.bottomCenter,
+                child: _buildBottomNavigationBar(context),
+              ),
+            ],
+          ),
+        );
+      case WebContentPage.myPosts:
+        final myRelayGroup = RelayGroup.sharedInstance.myGroups[Account.sharedInstance.currentPubkey]?.value;
+        if (myRelayGroup == null) {
+          return _wrapWithBackHandler(
+            _buildWebPageWrapper(
+              title: 'My Posts',
+              showBackButton: false,
+              child: Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text('Become a creator to see your posts'),
+                    const SizedBox(height: 16),
+                    Builder(
+                      builder: (innerContext) => ElevatedButton(
+                        onPressed: () {
+                          Navigator.of(innerContext).push(
+                            MaterialPageRoute(builder: (context) => CreateCreatorPage()),
+                          );
+                        },
+                        child: Text('Become Creator'),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          );
+        }
+        return _wrapWithBackHandler(FeedPersonalPage(relayGroupDB: myRelayGroup));
+      case WebContentPage.shareProfile:
+        final currentPubkey = ChuChuUserInfoManager.sharedInstance.currentUserInfo?.pubKey;
+        if (currentPubkey != null && currentPubkey.isNotEmpty) {
+          return _wrapWithBackHandler(ShareProfilePage(pubkey: currentPubkey));
+        }
+        return _wrapWithBackHandler(_buildWebPageWrapper(
+          title: 'Share Profile', 
+          showBackButton: false,
+          child: Center(child: Text('No profile available')),
+        ));
+      case WebContentPage.wallet:
+        return _wrapWithBackHandler(WalletPage());
+      case WebContentPage.search:
+        return _wrapWithBackHandler(SearchPage());
+      case WebContentPage.bookmarks:
+        return _wrapWithBackHandler(BookmarksPage());
+      case WebContentPage.settings:
+        return _wrapWithBackHandler(MyProfilePage());
+    }
+  }
+  
+  /// Wrap page with back handler - intercepts back navigation to go Home
+  Widget _wrapWithBackHandler(Widget child) {
+    // Use HeroControllerScope to enable Hero animations in the nested Navigator
+    return HeroControllerScope(
+      controller: MaterialApp.createMaterialHeroController(),
+      child: Navigator(
+        key: ValueKey('${_currentWebPage}_navigator'),
+        onPopPage: (route, result) {
+          if (!route.didPop(result)) {
+            return false;
+          }
+          // If this was the last route, go back to Home
+          return true;
+        },
+        observers: [_WebContentNavigatorObserver(
+          onEmptyStack: () {
+            setState(() {
+              _currentWebPage = WebContentPage.home;
+            });
+          },
+        )],
+        onGenerateRoute: (settings) {
+          if (settings.name == '/') {
+            return MaterialPageRoute(
+              builder: (context) => child,
+              settings: settings,
+            );
+          }
+          return null;
+        },
+        initialRoute: '/',
+      ),
+    );
+  }
+  
+  /// Wrapper for simple web pages with consistent styling
+  Widget _buildWebPageWrapper({
+    required String title, 
+    required Widget child,
+    bool showBackButton = true,
+  }) {
+    return Scaffold(
+      appBar: AppBar(
+        backgroundColor: kBgLight,
+        elevation: 0,
+        automaticallyImplyLeading: false,
+        leading: showBackButton 
+            ? IconButton(
+                icon: Icon(Icons.arrow_back, color: kTitleColor),
+                onPressed: () {
+                  // Go back to Home
+                  setState(() {
+                    _currentWebPage = WebContentPage.home;
+                  });
+                },
+              )
+            : null,
+        title: Text(
+          title,
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+            color: kTitleColor,
+          ),
+        ),
+      ),
+      body: child,
     );
   }
 
@@ -531,6 +705,25 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
     );
     if(result != null && result){
       setState(() {});
+    }
+  }
+}
+
+/// Navigator observer to detect when the stack becomes empty
+class _WebContentNavigatorObserver extends NavigatorObserver {
+  final VoidCallback onEmptyStack;
+
+  _WebContentNavigatorObserver({required this.onEmptyStack});
+
+  @override
+  void didPop(Route route, Route? previousRoute) {
+    super.didPop(route, previousRoute);
+    // If there's no previous route after pop, the stack is empty
+    if (previousRoute == null) {
+      // Use post-frame callback to avoid setState during build
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        onEmptyStack();
+      });
     }
   }
 }
