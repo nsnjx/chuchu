@@ -130,8 +130,8 @@ class _DrawerMenuState extends State<DrawerMenu>
               children: [
                 Container(
                   width: double.infinity,
-                  padding: const EdgeInsets.only(
-                    top: 50,
+                  padding: EdgeInsets.only(
+                    top: kIsWeb ? 20 : 50,
                     bottom: 20,
                     left: 16,
                     right: 16,
@@ -490,21 +490,28 @@ class _DrawerMenuState extends State<DrawerMenu>
                       const SizedBox(height: 16),
                       // Creator Pro upgrade box
                       _buildCreatorProBox(context),
-                      Divider(color: theme.dividerColor.withOpacity(0.1)),
-                      _menuItem(
-                        context,
-                        Icons.logout,
-                        "Log Out",
-                        iconColor: theme.colorScheme.onSurfaceVariant,
-                        trailing: const SizedBox.shrink(),
-                        onTap: () {
-                          LogoutConfirmDialog.show(context, closeDrawer: true);
-                        },
-                      ),
-                      const SizedBox(height: 12),
                     ],
                   ),
                 ),
+              ),
+            ),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              child: Column(
+                children: [
+                  Divider(color: theme.dividerColor.withOpacity(0.1)),
+                  _menuItem(
+                    context,
+                    Icons.logout,
+                    "Log Out",
+                    iconColor: theme.colorScheme.onSurfaceVariant,
+                    trailing: const SizedBox.shrink(),
+                    onTap: () {
+                      LogoutConfirmDialog.show(context, closeDrawer: true);
+                    },
+                  ),
+                  const SizedBox(height: 12),
+                ],
               ),
             ),
           ],
