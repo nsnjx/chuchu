@@ -23,7 +23,6 @@ import '../../../core/utils/feed_widgets_utils.dart';
 import '../../../core/utils/navigator/navigator.dart';
 import '../../../core/widgets/chuchu_cached_network_Image.dart';
 import '../../../core/widgets/chuchu_smart_refresher.dart';
-import '../../../core/widgets/common_toast.dart';
 import '../../../data/models/noted_ui_model.dart';
 import '../../../core/utils/ui_refresh_mixin.dart';
 
@@ -318,7 +317,7 @@ class _FeedPageState extends State<FeedPage>
 
     if (notesList.isEmpty) {
       final theme = Theme.of(context);
-      return Column(
+      final content = Column(
         // mainAxisAlignment: MainAxisAlignment.center,
         children: [
           const SizedBox(height: 50),
@@ -334,7 +333,7 @@ class _FeedPageState extends State<FeedPage>
           ),
           const SizedBox(height: 12),
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 40),
+            padding: EdgeInsets.symmetric(horizontal: kIsWeb ? 20 : 40),
             child: Text(
               'Subscribe to your favorite creators to see their exclusive content and updates.',
               style: GoogleFonts.inter(
@@ -346,15 +345,16 @@ class _FeedPageState extends State<FeedPage>
           ),
           const SizedBox(height: 32),
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20),
+            padding: EdgeInsets.symmetric(horizontal: kIsWeb ? 0 : 20),
             child: SizedBox(
-              width: double.infinity,
+              width: kIsWeb ? null : double.infinity,
               height: 48,
               child: GestureDetector(
                 onTap: () {
                   ChuChuNavigator.pushPage(context, (context) => SearchPage());
                 },
                 child: Container(
+                  width: kIsWeb ? 280 : double.infinity,
                   decoration: BoxDecoration(
                     gradient: getBrandGradientHorizontal(),
                     borderRadius: BorderRadius.circular(12),
@@ -391,6 +391,16 @@ class _FeedPageState extends State<FeedPage>
           ),
         ],
       );
+
+      if (kIsWeb) {
+        return Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 600),
+            child: content,
+          ),
+        );
+      }
+      return content;
     }
 
     return ListView.builder(

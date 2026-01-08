@@ -508,15 +508,29 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
   }
 
   Widget _buildBottomNavigationBar(BuildContext context) {
+    if (kIsWeb) {
+      return _buildWebBottomNavigationBar(context);
+    } else {
+      return _buildMobileBottomNavigationBar(context);
+    }
+  }
+
+  Widget _buildWebBottomNavigationBar(BuildContext context) {
+    return Align(
+      alignment: Alignment.bottomRight,
+      child: Padding(
+        padding: const EdgeInsets.only(right: 24, bottom: 24),
+        child: _buildAddButton(),
+      ),
+    );
+  }
+
+  Widget _buildMobileBottomNavigationBar(BuildContext context) {
     final theme = Theme.of(context);
     final mediaQuery = MediaQuery.of(context);
     
-    // Use viewPadding.bottom for system navigation bar height (doesn't change with keyboard)
     final double systemBottomInset = mediaQuery.viewPadding.bottom;
-    // Also check padding.bottom as fallback (may be 0 on some Android devices with gesture nav)
     final double bottomInset = mediaQuery.padding.bottom;
-    
-    // Use the larger value to ensure we have enough space
     final double effectiveBottomInset = systemBottomInset > bottomInset 
         ? systemBottomInset 
         : bottomInset;
@@ -525,7 +539,6 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
     const double floatGap   = 24;
     const double sideMargin = 0;
     
-    // For Android: ensure minimum spacing to avoid being blocked by navigation bar
     final double minBottomPadding = Platform.isAndroid ? 32.0 : floatGap;
     final double totalBottomPadding = effectiveBottomInset + floatGap;
     final double finalBottomPadding = totalBottomPadding > minBottomPadding 
