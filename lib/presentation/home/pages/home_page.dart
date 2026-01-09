@@ -289,21 +289,22 @@ class HomePageState extends State<HomePage> with SingleTickerProviderStateMixin,
                       nestedContext,
                       navigatorContext: nestedContext,
                       callback: (pushContext) async {
-                        // Use the nested Navigator context to push
-                        final navigator = Navigator.of(pushContext, rootNavigator: false);
-                        final result = await navigator.push(
-                          MaterialPageRoute(
-                            builder: (context) => CreateCreatorPage(),
-                            fullscreenDialog: false,
-                          ),
+                        // Use ChuChuNavigator to handle both web and mobile
+                        final result = await ChuChuNavigator.pushPage(
+                          pushContext,
+                          (context) => CreateCreatorPage(),
+                          nestedNavigatorContext: kIsWeb ? pushContext : null,
+                          fullscreenDialog: false,
                         );
                         // If creator was created successfully, refresh state and return to home
-                        if (result != null && result && mounted) {
+                        if (result != null && result == true && mounted) {
                           setState(() {});
                           // Return to home page after creating creator
-                          setState(() {
-                            _currentWebPage = WebContentPage.home;
-                          });
+                          if (kIsWeb) {
+                            setState(() {
+                              _currentWebPage = WebContentPage.home;
+                            });
+                          }
                         }
                       },
                     );
@@ -321,29 +322,21 @@ class HomePageState extends State<HomePage> with SingleTickerProviderStateMixin,
                         const SizedBox(height: 16),
                         ElevatedButton(
                           onPressed: () async {
-                            // On web, use nested Navigator context
-                            if (kIsWeb) {
-                              final navigator = Navigator.of(nestedContext, rootNavigator: false);
-                              final result = await navigator.push(
-                                MaterialPageRoute(
-                                  builder: (context) => CreateCreatorPage(),
-                                  fullscreenDialog: false,
-                                ),
-                              );
-                              // If creator was created successfully, refresh state and return to home
-                              if (result != null && result && mounted) {
-                                setState(() {});
-                                // Return to home page after creating creator
+                            // Use ChuChuNavigator to handle both web and mobile
+                            final result = await ChuChuNavigator.pushPage(
+                              nestedContext,
+                              (context) => CreateCreatorPage(),
+                              nestedNavigatorContext: kIsWeb ? nestedContext : null,
+                              fullscreenDialog: false,
+                            );
+                            // If creator was created successfully, refresh state and return to home
+                            if (result != null && result == true && mounted) {
+                              setState(() {});
+                              // Return to home page after creating creator
+                              if (kIsWeb) {
                                 setState(() {
                                   _currentWebPage = WebContentPage.home;
                                 });
-                              }
-                            } else {
-                              final result = await Navigator.of(nestedContext).push(
-                                MaterialPageRoute(builder: (context) => CreateCreatorPage()),
-                              );
-                              if (result != null && result && mounted) {
-                                setState(() {});
                               }
                             }
                           },
@@ -903,48 +896,25 @@ class HomePageState extends State<HomePage> with SingleTickerProviderStateMixin,
   }
 
   void _navigateToCreatePostWithContext(BuildContext pushContext) {
-    // On web, push in nested Navigator - Navigator is already constrained to 600px width
-    if (kIsWeb) {
-      final navigator = Navigator.of(pushContext, rootNavigator: false);
-      navigator.push(
-        MaterialPageRoute(
-          builder: (context) => CreateFeedPage(),
-          fullscreenDialog: false,
-        ),
-      );
-    } else {
-      // Mobile: use slide transition
-      Navigator.of(pushContext).push(
-        FeedWidgetsUtils.createSlideTransition(
-          pageBuilder: (context, animation, secondaryAnimation) => CreateFeedPage(),
-        ),
-      );
-    }
+    // Use ChuChuNavigator to handle both web and mobile
+    ChuChuNavigator.pushPage(
+      pushContext,
+      (context) => CreateFeedPage(),
+      nestedNavigatorContext: (kIsWeb == true) ? pushContext : null,
+      fullscreenDialog: false,
+    );
   }
 
   void _navigateToCreateCreatorWithContext(BuildContext pushContext) async {
-    // On web, push in nested Navigator - Navigator is already constrained to 600px width
-    if (kIsWeb) {
-      final navigator = Navigator.of(pushContext, rootNavigator: false);
-      final result = await navigator.push(
-        MaterialPageRoute(
-          builder: (context) => CreateCreatorPage(),
-          fullscreenDialog: false,
-        ),
-      );
-      if (result != null && result && mounted) {
-        setState(() {});
-      }
-    } else {
-      // Mobile: use slide transition
-      final result = await Navigator.of(pushContext).push(
-        FeedWidgetsUtils.createSlideTransition(
-          pageBuilder: (context, animation, secondaryAnimation) => CreateCreatorPage(),
-        ),
-      );
-      if (result != null && result && mounted) {
-        setState(() {});
-      }
+    // Use ChuChuNavigator to handle both web and mobile
+    final result = await ChuChuNavigator.pushPage(
+      pushContext,
+      (context) => CreateCreatorPage(),
+      nestedNavigatorContext: (kIsWeb == true) ? pushContext : null,
+      fullscreenDialog: false,
+    );
+    if (result != null && result == true && mounted) {
+      setState(() {});
     }
   }
 }

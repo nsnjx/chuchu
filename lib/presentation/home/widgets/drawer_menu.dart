@@ -90,63 +90,30 @@ class _DrawerMenuState extends State<DrawerMenu>
   void _handleMenuTap(WebContentPage page, VoidCallback mobileAction, {Widget Function()? webPageBuilder}) {
     if (kIsWeb && widget.onWebPageChange != null && webPageBuilder != null) {
       // On web, push the page directly in the home page's nested Navigator
-      // Don't switch to the page first, just push it
       final homeState = context.findAncestorStateOfType<HomePageState>();
       if (homeState != null && homeState.mounted) {
         // Get nested Navigator context from home page
         final homeNestedContext = homeState.getNestedNavigatorContext(WebContentPage.home);
         if (homeNestedContext != null) {
-          try {
-            // Use the home page's nested Navigator context to push
-            final navigator = Navigator.of(homeNestedContext, rootNavigator: false);
-            // Push with slide animation from right to left
-            navigator.push(
-              PageRouteBuilder(
-                pageBuilder: (context, animation, secondaryAnimation) => webPageBuilder(),
-                transitionsBuilder: (context, animation, secondaryAnimation, child) {
-                  const begin = Offset(1.0, 0.0); // Start from right
-                  const end = Offset.zero; // End at center
-                  const curve = Curves.easeInOut;
-                  var tween = Tween(begin: begin, end: end).chain(CurveTween(curve: curve));
-                  var offsetAnimation = animation.drive(tween);
-                  return SlideTransition(position: offsetAnimation, child: child);
-                },
-                transitionDuration: const Duration(milliseconds: 300),
-                reverseTransitionDuration: const Duration(milliseconds: 250),
-                fullscreenDialog: false,
-              ),
-            );
-          } catch (e) {
-            // Fallback: switch page normally if nested Navigator not found
-            widget.onWebPageChange!(page);
-          }
+          // Use ChuChuNavigator with nested Navigator context for web
+          ChuChuNavigator.pushPage(
+            context,
+            (context) => webPageBuilder(),
+            nestedNavigatorContext: homeNestedContext,
+            fullscreenDialog: false,
+          );
         } else {
           // If home nested context not ready, wait for it
           WidgetsBinding.instance.addPostFrameCallback((_) {
             WidgetsBinding.instance.addPostFrameCallback((_) {
               final homeNestedContext = homeState.getNestedNavigatorContext(WebContentPage.home);
               if (homeNestedContext != null) {
-                try {
-                  final navigator = Navigator.of(homeNestedContext, rootNavigator: false);
-                  navigator.push(
-                    PageRouteBuilder(
-                      pageBuilder: (context, animation, secondaryAnimation) => webPageBuilder(),
-                      transitionsBuilder: (context, animation, secondaryAnimation, child) {
-                        const begin = Offset(1.0, 0.0);
-                        const end = Offset.zero;
-                        const curve = Curves.easeInOut;
-                        var tween = Tween(begin: begin, end: end).chain(CurveTween(curve: curve));
-                        var offsetAnimation = animation.drive(tween);
-                        return SlideTransition(position: offsetAnimation, child: child);
-                      },
-                      transitionDuration: const Duration(milliseconds: 300),
-                      reverseTransitionDuration: const Duration(milliseconds: 250),
-                      fullscreenDialog: false,
-                    ),
-                  );
-                } catch (e) {
-                  widget.onWebPageChange!(page);
-                }
+                ChuChuNavigator.pushPage(
+                  context,
+                  (context) => webPageBuilder(),
+                  nestedNavigatorContext: homeNestedContext,
+                  fullscreenDialog: false,
+                );
               } else {
                 // Final fallback: switch page normally
                 widget.onWebPageChange!(page);

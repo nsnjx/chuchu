@@ -144,6 +144,7 @@ class ChuChuNavigator extends Navigator {
     bool? isShortLived,
     bool fullscreenDialog = false,
     ChuChuPushPageType type = ChuChuPushPageType.slideToLeft,
+    BuildContext? nestedNavigatorContext,
   }) {
     pageName ??= builder(null).runtimeType.toString();
     context ??= navigatorKey.currentContext;
@@ -156,6 +157,28 @@ class ChuChuNavigator extends Navigator {
     );
     PageRoute<T> route;
 
+    // If nestedNavigatorContext is provided (for web), use it and create slide from right animation
+    if (nestedNavigatorContext != null) {
+      route = PageRouteBuilder<T>(
+        pageBuilder: (context, animation, secondaryAnimation) => builder(context),
+        transitionsBuilder: (context, animation, secondaryAnimation, child) {
+          const begin = Offset(1.0, 0.0); // Start from right
+          const end = Offset.zero; // End at center
+          const curve = Curves.easeInOut;
+          var tween = Tween(begin: begin, end: end).chain(CurveTween(curve: curve));
+          var offsetAnimation = animation.drive(tween);
+          return SlideTransition(position: offsetAnimation, child: child);
+        },
+        transitionDuration: const Duration(milliseconds: 300),
+        reverseTransitionDuration: const Duration(milliseconds: 250),
+        fullscreenDialog: fullscreenDialog,
+        settings: routeSettings,
+      );
+      // Use nested Navigator for web
+      return Navigator.of(nestedNavigatorContext, rootNavigator: false).push(route);
+    }
+
+    // Default behavior for mobile
     switch (type) {
       case ChuChuPushPageType.slideToLeft:
         route = SlideLeftToRightRoute<T>(
