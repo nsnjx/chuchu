@@ -2,9 +2,12 @@ import 'package:chuchu/core/relayGroups/model/relayGroupDB_isar.dart';
 import 'package:chuchu/core/relayGroups/relayGroup+info.dart';
 import 'package:chuchu/core/utils/widget_tool_utils.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:chuchu/core/widgets/common_image.dart';
 import 'package:chuchu/core/account/model/userDB_isar.dart';
 import 'package:chuchu/presentation/feed/pages/feed_personal_page.dart';
+import 'package:chuchu/presentation/home/pages/home_page.dart';
+import 'package:chuchu/presentation/home/widgets/drawer_menu.dart';
 import 'package:google_fonts/google_fonts.dart' show GoogleFonts;
 import 'package:nostr_core_dart/src/nips/nip_019.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -311,6 +314,31 @@ class _SearchPageState extends State<SearchPage> with ChuChuUIRefreshMixin {
     );
     return GestureDetector(
       onTap: () {
+        // On web, if it's current user's page, switch to myPosts; otherwise push in nested Navigator
+        if (kIsWeb) {
+          final currentPubkey = Account.sharedInstance.currentPubkey;
+          final isCurrentUser = relayGroup.groupId == currentPubkey;
+          
+          if (isCurrentUser) {
+            // Switch to myPosts page
+            final homeState = context.findAncestorStateOfType<HomePageState>();
+            if (homeState != null) {
+              homeState.switchToWebPage(WebContentPage.myPosts);
+              return;
+            }
+          } else {
+            // For other users, push in nested Navigator
+            final navigator = Navigator.of(context, rootNavigator: false);
+            navigator.push(
+              MaterialPageRoute(
+                builder: (context) => FeedPersonalPage(relayGroupDB: relayGroup),
+              ),
+            );
+            return;
+          }
+        }
+        
+        // Mobile: use normal navigation
         ChuChuNavigator.pushPage(
           context,
           (context) => FeedPersonalPage(relayGroupDB: relayGroup),

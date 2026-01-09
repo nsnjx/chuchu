@@ -27,6 +27,8 @@ import '../../../data/models/noted_ui_model.dart';
 import '../../../core/utils/ui_refresh_mixin.dart';
 
 import '../../search/pages/search_page.dart';
+import '../../home/pages/home_page.dart';
+import '../../home/widgets/drawer_menu.dart';
 import '../widgets/feed_widget.dart';
 import '../widgets/feed_skeleton_widget.dart';
 import 'feed_info_page.dart';
@@ -349,9 +351,26 @@ class _FeedPageState extends State<FeedPage>
             child: SizedBox(
               width: kIsWeb ? null : double.infinity,
               height: 48,
-              child: GestureDetector(
+                child: GestureDetector(
                 onTap: () {
-                  ChuChuNavigator.pushPage(context, (context) => SearchPage());
+                  // On web, switch to search page in content area instead of pushing
+                  if (kIsWeb) {
+                    // Find HomePage state and switch to search page
+                    final homeState = context.findAncestorStateOfType<HomePageState>();
+                    if (homeState != null) {
+                      homeState.switchToWebPage(WebContentPage.search);
+                    } else {
+                      // Fallback: try to find nested Navigator
+                      final navigator = Navigator.of(context, rootNavigator: false);
+                      navigator.push(
+                        MaterialPageRoute(
+                          builder: (context) => SearchPage(),
+                        ),
+                      );
+                    }
+                  } else {
+                    ChuChuNavigator.pushPage(context, (context) => SearchPage());
+                  }
                 },
                 child: Container(
                   width: kIsWeb ? 280 : double.infinity,
@@ -493,12 +512,41 @@ class _FeedPageState extends State<FeedPage>
 
     return GestureDetector(
       onTap: () async {
+        // On web, if it's current user's page, switch to myPosts; otherwise push in nested Navigator
+        if (kIsWeb) {
+          final currentPubkey = Account.sharedInstance.currentPubkey;
+          final isCurrentUser = relayGroupDB.groupId == currentPubkey;
+          
+          if (isCurrentUser) {
+            // Switch to myPosts page
+            final homeState = context.findAncestorStateOfType<HomePageState>();
+            if (homeState != null) {
+              homeState.switchToWebPage(WebContentPage.myPosts);
+              updateNotesList(true);
+              _handleNewNotesAfterNavigation(relayGroupDB, hasNewNotes);
+              return;
+            }
+          } else {
+            // For other users, push in nested Navigator
+            final navigator = Navigator.of(context, rootNavigator: false);
+            await navigator.push(
+              MaterialPageRoute(
+                builder: (context) => FeedPersonalPage(relayGroupDB: relayGroupDB),
+              ),
+            );
+            updateNotesList(true);
+            _handleNewNotesAfterNavigation(relayGroupDB, hasNewNotes);
+            return;
+          }
+        }
+        
+        // Mobile: use normal navigation
         await ChuChuNavigator.pushPage(
           context,
           (context) => FeedPersonalPage(relayGroupDB: relayGroupDB),
         );
         updateNotesList(true);
-        _handleNewNotesAfterNavigation(relayGroupDB,hasNewNotes);
+        _handleNewNotesAfterNavigation(relayGroupDB, hasNewNotes);
       },
       child: _buildStoryItem(
         relayGroup: relayGroupDB,
@@ -513,7 +561,17 @@ class _FeedPageState extends State<FeedPage>
   Widget _buildAddStoryItem() {
     return GestureDetector(
       onTap: () {
-        ChuChuNavigator.pushPage(context, (context) => SearchPage());
+        // On web, switch to search page in content area instead of pushing
+        if (kIsWeb) {
+          final homeState = context.findAncestorStateOfType<HomePageState>();
+          if (homeState != null) {
+            homeState.switchToWebPage(WebContentPage.search);
+          } else {
+            ChuChuNavigator.pushPage(context, (context) => SearchPage());
+          }
+        } else {
+          ChuChuNavigator.pushPage(context, (context) => SearchPage());
+        }
       },
       child: _buildStoryItem(
         isCurrentUser: false,

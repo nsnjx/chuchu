@@ -67,10 +67,10 @@ class HomePage extends StatefulWidget {
   const HomePage({super.key});
 
   @override
-  State<HomePage> createState() => _HomePageState();
+  State<HomePage> createState() => HomePageState();
 }
 
-class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin, ChuChuFeedObserver, ChuChuUIRefreshMixin {
+class HomePageState extends State<HomePage> with SingleTickerProviderStateMixin, ChuChuFeedObserver, ChuChuUIRefreshMixin {
   final double maxSlide = 0.75;
   late final AnimationController _controller;
   late final ScrollController _scrollController;
@@ -80,8 +80,27 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
   
   // Web content page state
   WebContentPage _currentWebPage = WebContentPage.home;
+  // Flag to show dialog when switching to myPosts page
+  bool _shouldShowMyPostsDialog = false;
+  // Store nested Navigator context for each page to allow pushing from drawer menu
+  final Map<WebContentPage, BuildContext?> _nestedNavigatorContexts = {};
 
   bool get isOpen => _controller.value == 1.0;
+  
+  /// Public method to switch web content page (used by child widgets)
+  void switchToWebPage(WebContentPage page, {bool showDialog = false}) {
+    if (kIsWeb && mounted) {
+      setState(() {
+        _currentWebPage = page;
+        _shouldShowMyPostsDialog = showDialog && page == WebContentPage.myPosts;
+      });
+    }
+  }
+  
+  /// Get nested Navigator context for a specific page (used by drawer menu)
+  BuildContext? getNestedNavigatorContext(WebContentPage page) {
+    return _nestedNavigatorContexts[page];
+  }
 
   @override
   void initState() {
@@ -232,44 +251,109 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
   Widget _buildWebContentPage() {
     switch (_currentWebPage) {
       case WebContentPage.home:
-        return Scaffold(
-          appBar: _buildAppBar(context),
-          body: Stack(
-            children: [
-              _buildCurrentPage(),
-              Align(
-                alignment: Alignment.bottomCenter,
-                child: _buildBottomNavigationBar(context),
-              ),
-            ],
+        return _wrapWithBackHandler(
+          Builder(
+            builder: (nestedContext) {
+              // Store nested Navigator context for home page
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (mounted) {
+                  _nestedNavigatorContexts[WebContentPage.home] = nestedContext;
+                }
+              });
+              return Scaffold(
+                appBar: _buildAppBar(context),
+                body: Stack(
+                  children: [
+                    _buildCurrentPage(),
+                    Align(
+                      alignment: Alignment.bottomCenter,
+                      child: _buildBottomNavigationBar(context),
+                    ),
+                  ],
+                ),
+              );
+            },
           ),
         );
       case WebContentPage.myPosts:
         final myRelayGroup = RelayGroup.sharedInstance.myGroups[Account.sharedInstance.currentPubkey]?.value;
         if (myRelayGroup == null) {
           return _wrapWithBackHandler(
-            _buildWebPageWrapper(
-              title: 'My Posts',
-              showBackButton: false,
-              child: Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text('Become a creator to see your posts'),
-                    const SizedBox(height: 16),
-                    Builder(
-                      builder: (innerContext) => ElevatedButton(
-                        onPressed: () {
-                          Navigator.of(innerContext).push(
-                            MaterialPageRoute(builder: (context) => CreateCreatorPage()),
-                          );
-                        },
-                        child: Text('Become Creator'),
-                      ),
+            Builder(
+              builder: (nestedContext) {
+                // Show dialog if flag is set (when switching from drawer menu)
+                if (_shouldShowMyPostsDialog && kIsWeb) {
+                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                    _shouldShowMyPostsDialog = false;
+                    FeedWidgetsUtils.showBecomeCreatorDialog(
+                      nestedContext,
+                      navigatorContext: nestedContext,
+                      callback: (pushContext) async {
+                        // Use the nested Navigator context to push
+                        final navigator = Navigator.of(pushContext, rootNavigator: false);
+                        final result = await navigator.push(
+                          MaterialPageRoute(
+                            builder: (context) => CreateCreatorPage(),
+                            fullscreenDialog: false,
+                          ),
+                        );
+                        // If creator was created successfully, refresh state and return to home
+                        if (result != null && result && mounted) {
+                          setState(() {});
+                          // Return to home page after creating creator
+                          setState(() {
+                            _currentWebPage = WebContentPage.home;
+                          });
+                        }
+                      },
+                    );
+                  });
+                }
+                
+                return _buildWebPageWrapper(
+                  title: 'My Posts',
+                  showBackButton: false,
+                  child: Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text('Become a creator to see your posts'),
+                        const SizedBox(height: 16),
+                        ElevatedButton(
+                          onPressed: () async {
+                            // On web, use nested Navigator context
+                            if (kIsWeb) {
+                              final navigator = Navigator.of(nestedContext, rootNavigator: false);
+                              final result = await navigator.push(
+                                MaterialPageRoute(
+                                  builder: (context) => CreateCreatorPage(),
+                                  fullscreenDialog: false,
+                                ),
+                              );
+                              // If creator was created successfully, refresh state and return to home
+                              if (result != null && result && mounted) {
+                                setState(() {});
+                                // Return to home page after creating creator
+                                setState(() {
+                                  _currentWebPage = WebContentPage.home;
+                                });
+                              }
+                            } else {
+                              final result = await Navigator.of(nestedContext).push(
+                                MaterialPageRoute(builder: (context) => CreateCreatorPage()),
+                              );
+                              if (result != null && result && mounted) {
+                                setState(() {});
+                              }
+                            }
+                          },
+                          child: Text('Become Creator'),
+                        ),
+                      ],
                     ),
-                  ],
-                ),
-              ),
+                  ),
+                );
+              },
             ),
           );
         }
@@ -277,7 +361,19 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
       case WebContentPage.shareProfile:
         final currentPubkey = ChuChuUserInfoManager.sharedInstance.currentUserInfo?.pubKey;
         if (currentPubkey != null && currentPubkey.isNotEmpty) {
-          return _wrapWithBackHandler(ShareProfilePage(pubkey: currentPubkey));
+          return _wrapWithBackHandler(
+            Builder(
+              builder: (nestedContext) {
+                // Store nested Navigator context for this page
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  if (mounted) {
+                    _nestedNavigatorContexts[WebContentPage.shareProfile] = nestedContext;
+                  }
+                });
+                return ShareProfilePage(pubkey: currentPubkey);
+              },
+            ),
+          );
         }
         return _wrapWithBackHandler(_buildWebPageWrapper(
           title: 'Share Profile', 
@@ -285,13 +381,61 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
           child: Center(child: Text('No profile available')),
         ));
       case WebContentPage.wallet:
-        return _wrapWithBackHandler(WalletPage());
+        return _wrapWithBackHandler(
+          Builder(
+            builder: (nestedContext) {
+              // Store nested Navigator context for this page
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (mounted) {
+                  _nestedNavigatorContexts[WebContentPage.wallet] = nestedContext;
+                }
+              });
+              return WalletPage();
+            },
+          ),
+        );
       case WebContentPage.search:
-        return _wrapWithBackHandler(SearchPage());
+        return _wrapWithBackHandler(
+          Builder(
+            builder: (nestedContext) {
+              // Store nested Navigator context for this page
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (mounted) {
+                  _nestedNavigatorContexts[WebContentPage.search] = nestedContext;
+                }
+              });
+              return SearchPage();
+            },
+          ),
+        );
       case WebContentPage.bookmarks:
-        return _wrapWithBackHandler(BookmarksPage());
+        return _wrapWithBackHandler(
+          Builder(
+            builder: (nestedContext) {
+              // Store nested Navigator context for this page
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (mounted) {
+                  _nestedNavigatorContexts[WebContentPage.bookmarks] = nestedContext;
+                }
+              });
+              return BookmarksPage();
+            },
+          ),
+        );
       case WebContentPage.settings:
-        return _wrapWithBackHandler(MyProfilePage());
+        return _wrapWithBackHandler(
+          Builder(
+            builder: (nestedContext) {
+              // Store nested Navigator context for this page
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (mounted) {
+                  _nestedNavigatorContexts[WebContentPage.settings] = nestedContext;
+                }
+              });
+              return MyProfilePage();
+            },
+          ),
+        );
     }
   }
   
@@ -300,32 +444,60 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
     // Use HeroControllerScope to enable Hero animations in the nested Navigator
     return HeroControllerScope(
       controller: MaterialApp.createMaterialHeroController(),
-      child: Navigator(
-        key: ValueKey('${_currentWebPage}_navigator'),
-        onPopPage: (route, result) {
-          if (!route.didPop(result)) {
-            return false;
-          }
-          // If this was the last route, go back to Home
-          return true;
-        },
-        observers: [_WebContentNavigatorObserver(
-          onEmptyStack: () {
-            setState(() {
-              _currentWebPage = WebContentPage.home;
+      child: ClipRect(
+        child: Navigator(
+          key: ValueKey('${_currentWebPage}_navigator'),
+          onPopPage: (route, result) {
+            if (!route.didPop(result)) {
+              return false;
+            }
+            // After pop, check if we should return to home
+            // This will be handled by the NavigatorObserver if stack becomes empty
+            // But if we're on myPosts page and popping back to initial route, go to home
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (mounted && _currentWebPage != WebContentPage.home) {
+                // Check if Navigator can still pop (if not, we're back to initial route)
+                final navigatorState = Navigator.of(context, rootNavigator: false);
+                if (!navigatorState.canPop() && _currentWebPage == WebContentPage.myPosts) {
+                  // We're back to initial route on myPosts page, return to home
+                  setState(() {
+                    _currentWebPage = WebContentPage.home;
+                  });
+                }
+              }
             });
+            return true;
           },
-        )],
-        onGenerateRoute: (settings) {
-          if (settings.name == '/') {
-            return MaterialPageRoute(
-              builder: (context) => child,
-              settings: settings,
-            );
-          }
-          return null;
-        },
-        initialRoute: '/',
+          observers: [_WebContentNavigatorObserver(
+            onEmptyStack: () {
+              // When stack becomes empty, return to home page
+              if (_currentWebPage != WebContentPage.home && mounted) {
+                setState(() {
+                  _currentWebPage = WebContentPage.home;
+                });
+              }
+            },
+            onPopToInitial: () {
+              // When popping back to initial route, return to home
+              // This applies to all pages (myPosts, shareProfile, wallet, search, bookmarks, settings)
+              if (_currentWebPage != WebContentPage.home && mounted) {
+                setState(() {
+                  _currentWebPage = WebContentPage.home;
+                });
+              }
+            },
+          )],
+          onGenerateRoute: (settings) {
+            if (settings.name == '/') {
+              return MaterialPageRoute(
+                builder: (context) => child,
+                settings: settings,
+              );
+            }
+            return null;
+          },
+          initialRoute: '/',
+        ),
       ),
     );
   }
@@ -526,7 +698,9 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
       alignment: Alignment.bottomRight,
       child: Padding(
         padding: const EdgeInsets.only(right: 24, bottom: 24),
-        child: _buildAddButton(),
+        child: Builder(
+          builder: (buttonContext) => _buildAddButton(buttonContext),
+        ),
       ),
     );
   }
@@ -645,16 +819,36 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
     );
   }
 
-  Widget _buildAddButton() {
+  Widget _buildAddButton([BuildContext? buttonContext]) {
+    // Use buttonContext if provided (from Builder in web), otherwise use this.context
+    final ctx = buttonContext ?? context;
     return GestureDetector(
       onTap: () {
         Map<String, ValueNotifier<RelayGroupDBISAR>>? groups = RelayGroup.sharedInstance.myGroups;
         bool hasExistingGroup = groups[Account.sharedInstance.currentPubkey] != null;
         
         if (hasExistingGroup) {
-          _navigateToCreatePost();
+          _navigateToCreatePostWithContext(ctx);
         } else {
-          FeedWidgetsUtils.showBecomeCreatorDialog(context,callback:_navigateToCreateCreator);
+          // Show dialog - on web, pass nested Navigator context for push
+          if (kIsWeb) {
+            // Use buttonContext which is inside nested Navigator
+            FeedWidgetsUtils.showBecomeCreatorDialog(
+              ctx,
+              navigatorContext: ctx, // Use buttonContext which is nested Navigator context
+              callback: (pushContext) {
+                _navigateToCreateCreatorWithContext(pushContext);
+              },
+            );
+          } else {
+            // On mobile, show dialog first
+            FeedWidgetsUtils.showBecomeCreatorDialog(
+              ctx,
+              callback: (pushContext) {
+                _navigateToCreateCreatorWithContext(pushContext);
+              },
+            );
+          }
         }
       },
       child: Container(
@@ -708,22 +902,49 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
     }
   }
 
-  void _navigateToCreatePost() {
-    Navigator.of(context).push(
-      FeedWidgetsUtils.createSlideTransition(
-        pageBuilder: (context, animation, secondaryAnimation) => CreateFeedPage(),
-      ),
-    );
+  void _navigateToCreatePostWithContext(BuildContext pushContext) {
+    // On web, push in nested Navigator - Navigator is already constrained to 600px width
+    if (kIsWeb) {
+      final navigator = Navigator.of(pushContext, rootNavigator: false);
+      navigator.push(
+        MaterialPageRoute(
+          builder: (context) => CreateFeedPage(),
+          fullscreenDialog: false,
+        ),
+      );
+    } else {
+      // Mobile: use slide transition
+      Navigator.of(pushContext).push(
+        FeedWidgetsUtils.createSlideTransition(
+          pageBuilder: (context, animation, secondaryAnimation) => CreateFeedPage(),
+        ),
+      );
+    }
   }
 
-  void _navigateToCreateCreator()async {
-    final result = await Navigator.of(context).push(
-      FeedWidgetsUtils.createSlideTransition(
-        pageBuilder: (context, animation, secondaryAnimation) => CreateCreatorPage(),
-      ),
-    );
-    if(result != null && result){
-      setState(() {});
+  void _navigateToCreateCreatorWithContext(BuildContext pushContext) async {
+    // On web, push in nested Navigator - Navigator is already constrained to 600px width
+    if (kIsWeb) {
+      final navigator = Navigator.of(pushContext, rootNavigator: false);
+      final result = await navigator.push(
+        MaterialPageRoute(
+          builder: (context) => CreateCreatorPage(),
+          fullscreenDialog: false,
+        ),
+      );
+      if (result != null && result && mounted) {
+        setState(() {});
+      }
+    } else {
+      // Mobile: use slide transition
+      final result = await Navigator.of(pushContext).push(
+        FeedWidgetsUtils.createSlideTransition(
+          pageBuilder: (context, animation, secondaryAnimation) => CreateCreatorPage(),
+        ),
+      );
+      if (result != null && result && mounted) {
+        setState(() {});
+      }
     }
   }
 }
@@ -731,8 +952,12 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
 /// Navigator observer to detect when the stack becomes empty
 class _WebContentNavigatorObserver extends NavigatorObserver {
   final VoidCallback onEmptyStack;
+  final VoidCallback? onPopToInitial;
 
-  _WebContentNavigatorObserver({required this.onEmptyStack});
+  _WebContentNavigatorObserver({
+    required this.onEmptyStack,
+    this.onPopToInitial,
+  });
 
   @override
   void didPop(Route route, Route? previousRoute) {
@@ -742,6 +967,11 @@ class _WebContentNavigatorObserver extends NavigatorObserver {
       // Use post-frame callback to avoid setState during build
       WidgetsBinding.instance.addPostFrameCallback((_) {
         onEmptyStack();
+      });
+    } else if (previousRoute.settings.name == '/' && onPopToInitial != null) {
+      // If we're popping back to initial route, check if we should return to home
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        onPopToInitial!();
       });
     }
   }

@@ -212,8 +212,9 @@ class FeedWidgetsUtils {
     return lineCount;
   }
 
-  static showBecomeCreatorDialog(context, {Function? callback}) {
-    final theme = Theme.of(context);
+  static showBecomeCreatorDialog(context, {Function(BuildContext)? callback, BuildContext? navigatorContext}) {
+    // Use navigatorContext if provided, otherwise use the dialog context
+    final pushContext = navigatorContext ?? context;
     return showGeneralDialog(
       context: context,
       barrierDismissible: true,
@@ -277,7 +278,13 @@ class FeedWidgetsUtils {
                       child: InkWell(
                         onTap: () {
                           Navigator.of(context).pop();
-                          callback?.call();
+                          // Wait for dialog to fully close before calling callback
+                          // This ensures dialog overlay doesn't interfere with pushed page
+                          WidgetsBinding.instance.addPostFrameCallback((_) {
+                            Future.microtask(() {
+                              callback?.call(pushContext);
+                            });
+                          });
                         },
                         borderRadius: BorderRadius.circular(12),
                         child: Container(

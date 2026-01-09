@@ -2,6 +2,7 @@ import 'package:chuchu/core/relayGroups/model/relayGroupDB_isar.dart';
 import 'package:chuchu/core/utils/widget_tool_utils.dart';
 import 'package:chuchu/core/widgets/common_toast.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:google_fonts/google_fonts.dart';
 import '../../../core/account/account.dart';
 import '../../../core/account/model/userDB_isar.dart';
@@ -14,6 +15,8 @@ import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/chuchu_cached_network_Image.dart';
 import '../../../data/models/noted_ui_model.dart';
 import '../../home/widgets/carousel_widget.dart';
+import '../../home/pages/home_page.dart';
+import '../../home/widgets/drawer_menu.dart';
 import '../pages/feed_info_page.dart';
 import '../pages/feed_personal_page.dart';
 import '../pages/feed_reply_page.dart';
@@ -252,6 +255,31 @@ class _FeedWidgetState extends State<FeedWidget> {
       child: GestureDetector(
         onTap: () {
           if (relayGroup != null) {
+            // On web, if it's current user's page, switch to myPosts; otherwise push in nested Navigator
+            if (kIsWeb) {
+              final currentPubkey = Account.sharedInstance.currentPubkey;
+              final isCurrentUser = relayGroup!.groupId == currentPubkey;
+              
+              if (isCurrentUser) {
+                // Switch to myPosts page
+                final homeState = context.findAncestorStateOfType<HomePageState>();
+                if (homeState != null) {
+                  homeState.switchToWebPage(WebContentPage.myPosts);
+                  return;
+                }
+              } else {
+                // For other users, push in nested Navigator
+                final navigator = Navigator.of(context, rootNavigator: false);
+                navigator.push(
+                  MaterialPageRoute(
+                    builder: (context) => FeedPersonalPage(relayGroupDB: relayGroup!),
+                  ),
+                );
+                return;
+              }
+            }
+            
+            // Mobile: use normal navigation
             ChuChuNavigator.pushPage(
               context,
               (context) => FeedPersonalPage(relayGroupDB: relayGroup!),

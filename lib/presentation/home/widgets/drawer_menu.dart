@@ -24,6 +24,7 @@ import '../../profile/pages/share_profile_page.dart';
 import '../../search/pages/search_page.dart';
 import '../../wallet/wallet_page.dart';
 import '../../feed/pages/bookmarks_page.dart';
+import '../pages/home_page.dart';
 
 /// Enum representing different content pages for web layout
 enum WebContentPage {
@@ -86,10 +87,77 @@ class _DrawerMenuState extends State<DrawerMenu>
   }
 
   /// Handle menu item tap - use callback for web, navigation for mobile
-  void _handleMenuTap(WebContentPage page, VoidCallback mobileAction) {
-    if (kIsWeb && widget.onWebPageChange != null) {
-      // On web, use callback to switch content without navigation
-      widget.onWebPageChange!(page);
+  void _handleMenuTap(WebContentPage page, VoidCallback mobileAction, {Widget Function()? webPageBuilder}) {
+    if (kIsWeb && widget.onWebPageChange != null && webPageBuilder != null) {
+      // On web, push the page directly in the home page's nested Navigator
+      // Don't switch to the page first, just push it
+      final homeState = context.findAncestorStateOfType<HomePageState>();
+      if (homeState != null && homeState.mounted) {
+        // Get nested Navigator context from home page
+        final homeNestedContext = homeState.getNestedNavigatorContext(WebContentPage.home);
+        if (homeNestedContext != null) {
+          try {
+            // Use the home page's nested Navigator context to push
+            final navigator = Navigator.of(homeNestedContext, rootNavigator: false);
+            // Push with slide animation from right to left
+            navigator.push(
+              PageRouteBuilder(
+                pageBuilder: (context, animation, secondaryAnimation) => webPageBuilder(),
+                transitionsBuilder: (context, animation, secondaryAnimation, child) {
+                  const begin = Offset(1.0, 0.0); // Start from right
+                  const end = Offset.zero; // End at center
+                  const curve = Curves.easeInOut;
+                  var tween = Tween(begin: begin, end: end).chain(CurveTween(curve: curve));
+                  var offsetAnimation = animation.drive(tween);
+                  return SlideTransition(position: offsetAnimation, child: child);
+                },
+                transitionDuration: const Duration(milliseconds: 300),
+                reverseTransitionDuration: const Duration(milliseconds: 250),
+                fullscreenDialog: false,
+              ),
+            );
+          } catch (e) {
+            // Fallback: switch page normally if nested Navigator not found
+            widget.onWebPageChange!(page);
+          }
+        } else {
+          // If home nested context not ready, wait for it
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              final homeNestedContext = homeState.getNestedNavigatorContext(WebContentPage.home);
+              if (homeNestedContext != null) {
+                try {
+                  final navigator = Navigator.of(homeNestedContext, rootNavigator: false);
+                  navigator.push(
+                    PageRouteBuilder(
+                      pageBuilder: (context, animation, secondaryAnimation) => webPageBuilder(),
+                      transitionsBuilder: (context, animation, secondaryAnimation, child) {
+                        const begin = Offset(1.0, 0.0);
+                        const end = Offset.zero;
+                        const curve = Curves.easeInOut;
+                        var tween = Tween(begin: begin, end: end).chain(CurveTween(curve: curve));
+                        var offsetAnimation = animation.drive(tween);
+                        return SlideTransition(position: offsetAnimation, child: child);
+                      },
+                      transitionDuration: const Duration(milliseconds: 300),
+                      reverseTransitionDuration: const Duration(milliseconds: 250),
+                      fullscreenDialog: false,
+                    ),
+                  );
+                } catch (e) {
+                  widget.onWebPageChange!(page);
+                }
+              } else {
+                // Final fallback: switch page normally
+                widget.onWebPageChange!(page);
+              }
+            });
+          });
+        }
+      } else {
+        // Fallback: switch page normally if homeState not found
+        widget.onWebPageChange!(page);
+      }
     } else {
       // On mobile, close drawer and navigate
       Navigator.of(context).pop();
@@ -351,30 +419,40 @@ class _DrawerMenuState extends State<DrawerMenu>
                                   ?.value;
                           if (myRelayGroup == null) {
                             // Show become creator dialog for both web and mobile
-                            FeedWidgetsUtils.showBecomeCreatorDialog(
-                              context,
-                              callback: () {
-                                Navigator.of(context, rootNavigator: true).pop();
-                                if (kIsWeb) {
-                                  // On web, navigate using root navigator
-                                  Navigator.of(context, rootNavigator: true).push(
+                            if (kIsWeb) {
+                              // On web, switch to myPosts page and show dialog in nested Navigator
+                              final homeState = context.findAncestorStateOfType<HomePageState>();
+                              if (homeState != null && homeState.mounted) {
+                                // Switch to myPosts page with dialog flag
+                                homeState.switchToWebPage(WebContentPage.myPosts, showDialog: true);
+                              } else {
+                                // Fallback if homeState not found
+                                FeedWidgetsUtils.showBecomeCreatorDialog(
+                                  context,
+                                  callback: (pushContext) {
+                                    Navigator.of(pushContext).push(
+                                      MaterialPageRoute(
+                                        builder: (context) => CreateCreatorPage(),
+                                      ),
+                                    );
+                                  },
+                                );
+                              }
+                            } else {
+                              // On mobile, show dialog first
+                              FeedWidgetsUtils.showBecomeCreatorDialog(
+                                context,
+                                callback: (pushContext) {
+                                  Navigator.of(pushContext).push(
                                     FeedWidgetsUtils.createSlideTransition(
                                       pageBuilder:
                                           (context, animation, secondaryAnimation) =>
                                               CreateCreatorPage(),
                                     ),
                                   );
-                                } else {
-                                  Navigator.of(context).push(
-                                    FeedWidgetsUtils.createSlideTransition(
-                                      pageBuilder:
-                                          (context, animation, secondaryAnimation) =>
-                                              CreateCreatorPage(),
-                                    ),
-                                  );
-                                }
-                              },
-                            );
+                                },
+                              );
+                            }
                             return;
                           }
                           // User is a creator, proceed with page switch
@@ -395,18 +473,21 @@ class _DrawerMenuState extends State<DrawerMenu>
                         'share_bg_icon.png',
                         "Share Profile",
                         isSelected: widget.currentPage == WebContentPage.shareProfile,
-                        onTap: () => _handleMenuTap(
-                          WebContentPage.shareProfile,
-                          () {
-                            final currentPubkey = ChuChuUserInfoManager.sharedInstance.currentUserInfo?.pubKey;
-                            if (currentPubkey != null && currentPubkey.isNotEmpty) {
-                              ChuChuNavigator.pushPage(
-                                context,
-                                (context) => ShareProfilePage(pubkey: currentPubkey),
-                              );
-                            }
-                          },
-                        ),
+                        onTap: () {
+                          final currentPubkey = ChuChuUserInfoManager.sharedInstance.currentUserInfo?.pubKey;
+                          if (currentPubkey != null && currentPubkey.isNotEmpty) {
+                            _handleMenuTap(
+                              WebContentPage.shareProfile,
+                              () {
+                                ChuChuNavigator.pushPage(
+                                  context,
+                                  (context) => ShareProfilePage(pubkey: currentPubkey),
+                                );
+                              },
+                              webPageBuilder: () => ShareProfilePage(pubkey: currentPubkey),
+                            );
+                          }
+                        },
                       ),
                       _menuItem(
                         context,
@@ -421,6 +502,7 @@ class _DrawerMenuState extends State<DrawerMenu>
                               (context) => WalletPage(),
                             );
                           },
+                          webPageBuilder: () => WalletPage(),
                         ),
                       ),
                       _menuItem(
@@ -436,6 +518,7 @@ class _DrawerMenuState extends State<DrawerMenu>
                               (context) => SearchPage(),
                             );
                           },
+                          webPageBuilder: () => SearchPage(),
                         ),
                       ),
                       _menuItem(
@@ -451,6 +534,7 @@ class _DrawerMenuState extends State<DrawerMenu>
                               (context) => BookmarksPage(),
                             );
                           },
+                          webPageBuilder: () => BookmarksPage(),
                         ),
                       ),
 
@@ -467,6 +551,7 @@ class _DrawerMenuState extends State<DrawerMenu>
                               (context) => const MyProfilePage(),
                             );
                           },
+                          webPageBuilder: () => const MyProfilePage(),
                         ),
                       ),
                       // _menuItem(
