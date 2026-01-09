@@ -95,25 +95,14 @@ class _DrawerMenuState extends State<DrawerMenu>
         // Get nested Navigator context from home page
         final homeNestedContext = homeState.getNestedNavigatorContext(WebContentPage.home);
         if (homeNestedContext != null) {
-          // Use ChuChuNavigator with nested Navigator context for web
-          ChuChuNavigator.pushPage(
-            context,
-            (context) => webPageBuilder(),
-            nestedNavigatorContext: homeNestedContext,
-            fullscreenDialog: false,
-          );
+          _pushPageWithPopIfNeeded(homeNestedContext, webPageBuilder);
         } else {
           // If home nested context not ready, wait for it
           WidgetsBinding.instance.addPostFrameCallback((_) {
             WidgetsBinding.instance.addPostFrameCallback((_) {
               final homeNestedContext = homeState.getNestedNavigatorContext(WebContentPage.home);
               if (homeNestedContext != null) {
-                ChuChuNavigator.pushPage(
-                  context,
-                  (context) => webPageBuilder(),
-                  nestedNavigatorContext: homeNestedContext,
-                  fullscreenDialog: false,
-                );
+                _pushPageWithPopIfNeeded(homeNestedContext, webPageBuilder);
               } else {
                 // Final fallback: switch page normally
                 widget.onWebPageChange!(page);
@@ -129,6 +118,33 @@ class _DrawerMenuState extends State<DrawerMenu>
       // On mobile, close drawer and navigate
       Navigator.of(context).pop();
       mobileAction();
+    }
+  }
+
+  /// Push page after popping to initial route if needed
+  void _pushPageWithPopIfNeeded(BuildContext nestedContext, Widget Function() webPageBuilder) {
+    final navigator = Navigator.of(nestedContext, rootNavigator: false);
+    // Check if Navigator can pop (has pages in stack)
+    if (navigator.canPop()) {
+      // Pop to initial route first
+      navigator.popUntil((route) => route.isFirst);
+      // After popping to initial route, push new page in next frame
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        ChuChuNavigator.pushPage(
+          nestedContext,
+          (context) => webPageBuilder(),
+          nestedNavigatorContext: nestedContext,
+          fullscreenDialog: false,
+        );
+      });
+    } else {
+      // No pages in stack, directly push
+      ChuChuNavigator.pushPage(
+        nestedContext,
+        (context) => webPageBuilder(),
+        nestedNavigatorContext: nestedContext,
+        fullscreenDialog: false,
+      );
     }
   }
 
