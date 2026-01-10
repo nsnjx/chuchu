@@ -465,12 +465,10 @@ class _DrawerMenuState extends State<DrawerMenu>
                           _handleMenuTap(
                             WebContentPage.myPosts,
                             () {
-                              ChuChuNavigator.pushPage(
-                                context,
-                                (context) =>
-                                    FeedPersonalPage(relayGroupDB: myRelayGroup),
-                              );
+                              // This callback is not used for myPosts since we switch directly
+                              // But we need to provide a callback, so we use an empty one
                             },
+                            webPageBuilder: () => FeedPersonalPage(relayGroupDB: myRelayGroup),
                           );
                         },
                       ),

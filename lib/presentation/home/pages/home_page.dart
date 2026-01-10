@@ -350,7 +350,19 @@ class HomePageState extends State<HomePage> with SingleTickerProviderStateMixin,
             ),
           );
         }
-        return _wrapWithBackHandler(FeedPersonalPage(relayGroupDB: myRelayGroup));
+        return _wrapWithBackHandler(
+          Builder(
+            builder: (nestedContext) {
+              // Store nested Navigator context for myPosts page
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (mounted) {
+                  _nestedNavigatorContexts[WebContentPage.myPosts] = nestedContext;
+                }
+              });
+              return FeedPersonalPage(relayGroupDB: myRelayGroup);
+            },
+          ),
+        );
       case WebContentPage.shareProfile:
         final currentPubkey = ChuChuUserInfoManager.sharedInstance.currentUserInfo?.pubKey;
         if (currentPubkey != null && currentPubkey.isNotEmpty) {

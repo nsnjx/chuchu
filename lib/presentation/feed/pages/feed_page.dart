@@ -528,12 +528,23 @@ class _FeedPageState extends State<FeedPage>
             }
           } else {
             // For other users, push in nested Navigator
-            final navigator = Navigator.of(context, rootNavigator: false);
-            await navigator.push(
-              MaterialPageRoute(
-                builder: (context) => FeedPersonalPage(relayGroupDB: relayGroupDB),
-              ),
-            );
+            // Get nested Navigator context from home page
+            final homeState = context.findAncestorStateOfType<HomePageState>();
+            final nestedContext = homeState?.getNestedNavigatorContext(WebContentPage.home);
+            if (nestedContext != null) {
+              await ChuChuNavigator.pushPage(
+                context,
+                (context) => FeedPersonalPage(relayGroupDB: relayGroupDB),
+                nestedNavigatorContext: nestedContext,
+                fullscreenDialog: false,
+              );
+            } else {
+              // Fallback: use normal navigation
+              await ChuChuNavigator.pushPage(
+                context,
+                (context) => FeedPersonalPage(relayGroupDB: relayGroupDB),
+              );
+            }
             updateNotesList(true);
             _handleNewNotesAfterNavigation(relayGroupDB, hasNewNotes);
             return;

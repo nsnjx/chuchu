@@ -20,6 +20,8 @@ import '../../../core/widgets/common_image.dart';
 import '../../../data/models/noted_ui_model.dart';
 import '../../profile/pages/profile_edit_page.dart';
 import '../../profile/pages/share_profile_page.dart';
+import '../../home/pages/home_page.dart';
+import '../../home/widgets/drawer_menu.dart';
 import '../widgets/feed_personal_header_widget.dart';
 import '../widgets/feed_widget.dart';
 import '../widgets/subscribed_ui_widget.dart';
@@ -171,7 +173,26 @@ class _FeedPersonalPageState extends State<FeedPersonalPage>
           children: [
             IconButton(
               icon: const Icon(Icons.arrow_back, color: Colors.white),
-              onPressed: () => Navigator.of(context).pop(),
+              onPressed: () {
+                // On web, check if we're in a nested Navigator and if we can pop
+                // If we're the initial route (can't pop), switch to home page instead
+                if (kIsWeb) {
+                  final navigator = Navigator.of(context, rootNavigator: false);
+                  if (navigator.canPop()) {
+                    navigator.pop();
+                  } else {
+                    // We're the initial route, switch to home page
+                    final homeState = context.findAncestorStateOfType<HomePageState>();
+                    if (homeState != null) {
+                      homeState.switchToWebPage(WebContentPage.home);
+                    } else {
+                      Navigator.of(context).pop();
+                    }
+                  }
+                } else {
+                  Navigator.of(context).pop();
+                }
+              },
             ),
             const SizedBox(width: 4),
             Expanded(

@@ -328,12 +328,23 @@ class _SearchPageState extends State<SearchPage> with ChuChuUIRefreshMixin {
             }
           } else {
             // For other users, push in nested Navigator
-            final navigator = Navigator.of(context, rootNavigator: false);
-            navigator.push(
-              MaterialPageRoute(
-                builder: (context) => FeedPersonalPage(relayGroupDB: relayGroup),
-              ),
-            );
+            // Get nested Navigator context from home page
+            final homeState = context.findAncestorStateOfType<HomePageState>();
+            final nestedContext = homeState?.getNestedNavigatorContext(WebContentPage.home);
+            if (nestedContext != null) {
+              ChuChuNavigator.pushPage(
+                context,
+                (context) => FeedPersonalPage(relayGroupDB: relayGroup),
+                nestedNavigatorContext: nestedContext,
+                fullscreenDialog: false,
+              );
+            } else {
+              // Fallback: use normal navigation
+              ChuChuNavigator.pushPage(
+                context,
+                (context) => FeedPersonalPage(relayGroupDB: relayGroup),
+              );
+            }
             return;
           }
         }

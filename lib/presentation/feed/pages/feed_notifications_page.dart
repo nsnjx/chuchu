@@ -3,6 +3,7 @@ import 'package:chuchu/core/feed/feed+notification.dart';
 import 'package:chuchu/core/widgets/common_toast.dart';
 import 'package:chuchu/data/models/feed_extension_model.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:google_fonts/google_fonts.dart';
 import '../../../core/feed/feed.dart';
 import '../../../core/feed/model/noteDB_isar.dart';
@@ -19,6 +20,8 @@ import '../../../core/theme/app_theme.dart';
 import '../../../core/account/account.dart';
 import '../../../core/account/model/userDB_isar.dart';
 import '../../../data/models/noted_ui_model.dart';
+import '../../home/pages/home_page.dart';
+import '../../home/widgets/drawer_menu.dart';
 import 'feed_info_page.dart';
 import 'feed_personal_page.dart';
 
@@ -319,11 +322,32 @@ class _FeedNotificationsPageState extends State<FeedNotificationsPage>
                 CommonToast.instance.show(context, 'Creator not enabled',toastType:ToastType.failed);
                 return;
               }
-              ChuChuNavigator.pushPage(
-                context,
-                (context) =>
-                    FeedPersonalPage(relayGroupDB: widget.relayGroupDB!),
-              );
+              // On web, use nested Navigator context; on mobile, use normal navigation
+              if (kIsWeb) {
+                // Get nested Navigator context from home page
+                final homeState = context.findAncestorStateOfType<HomePageState>();
+                final nestedContext = homeState?.getNestedNavigatorContext(WebContentPage.home);
+                if (nestedContext != null) {
+                  ChuChuNavigator.pushPage(
+                    context,
+                    (context) => FeedPersonalPage(relayGroupDB: widget.relayGroupDB!),
+                    nestedNavigatorContext: nestedContext,
+                    fullscreenDialog: false,
+                  );
+                } else {
+                  // Fallback: use normal navigation
+                  ChuChuNavigator.pushPage(
+                    context,
+                    (context) => FeedPersonalPage(relayGroupDB: widget.relayGroupDB!),
+                  );
+                }
+              } else {
+                // Mobile: use normal navigation
+                ChuChuNavigator.pushPage(
+                  context,
+                  (context) => FeedPersonalPage(relayGroupDB: widget.relayGroupDB!),
+                );
+              }
             }
           },
           child: Container(
