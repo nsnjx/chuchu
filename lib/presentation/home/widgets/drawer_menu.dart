@@ -92,23 +92,46 @@ class _DrawerMenuState extends State<DrawerMenu>
       // On web, push the page directly in the home page's nested Navigator
       final homeState = context.findAncestorStateOfType<HomePageState>();
       if (homeState != null && homeState.mounted) {
-        // Get nested Navigator context from home page
-        final homeNestedContext = homeState.getNestedNavigatorContext(WebContentPage.home);
-        if (homeNestedContext != null) {
-          _pushPageWithPopIfNeeded(homeNestedContext, webPageBuilder);
-        } else {
-          // If home nested context not ready, wait for it
+        // If current page is not home, switch to home first
+        if (widget.currentPage != WebContentPage.home) {
+          // Switch to home page first
+          widget.onWebPageChange!(WebContentPage.home);
+          // Wait for home page to build and get nested Navigator context
           WidgetsBinding.instance.addPostFrameCallback((_) {
             WidgetsBinding.instance.addPostFrameCallback((_) {
               final homeNestedContext = homeState.getNestedNavigatorContext(WebContentPage.home);
               if (homeNestedContext != null) {
                 _pushPageWithPopIfNeeded(homeNestedContext, webPageBuilder);
               } else {
-                // Final fallback: switch page normally
-                widget.onWebPageChange!(page);
+                // If still not ready, try one more time
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  final homeNestedContext = homeState.getNestedNavigatorContext(WebContentPage.home);
+                  if (homeNestedContext != null) {
+                    _pushPageWithPopIfNeeded(homeNestedContext, webPageBuilder);
+                  }
+                });
               }
             });
           });
+        } else {
+          // Already on home page, get nested Navigator context and push
+          final homeNestedContext = homeState.getNestedNavigatorContext(WebContentPage.home);
+          if (homeNestedContext != null) {
+            _pushPageWithPopIfNeeded(homeNestedContext, webPageBuilder);
+          } else {
+            // If home nested context not ready, wait for it
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                final homeNestedContext = homeState.getNestedNavigatorContext(WebContentPage.home);
+                if (homeNestedContext != null) {
+                  _pushPageWithPopIfNeeded(homeNestedContext, webPageBuilder);
+                } else {
+                  // Final fallback: switch page normally
+                  widget.onWebPageChange!(page);
+                }
+              });
+            });
+          }
         }
       } else {
         // Fallback: switch page normally if homeState not found
@@ -625,13 +648,54 @@ class _DrawerMenuState extends State<DrawerMenu>
       buttonText = 'Become Creator';
       onButtonTap = () {
         if (kIsWeb) {
-          // On web, sidebar is fixed, use root navigator to push page
-          Navigator.of(context, rootNavigator: true).push(
-            FeedWidgetsUtils.createSlideTransition(
-              pageBuilder:
-                  (context, animation, secondaryAnimation) => CreateCreatorPage(),
-            ),
-          );
+          // On web, push in nested Navigator of home page
+          final homeState = context.findAncestorStateOfType<HomePageState>();
+          if (homeState != null && homeState.mounted) {
+            // If current page is not home, switch to home first
+            if (widget.currentPage != WebContentPage.home) {
+              widget.onWebPageChange!(WebContentPage.home);
+              // Wait for home page to build and get nested Navigator context
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  final homeNestedContext = homeState.getNestedNavigatorContext(WebContentPage.home);
+                  if (homeNestedContext != null) {
+                    ChuChuNavigator.pushPage(
+                      context,
+                      (context) => CreateCreatorPage(),
+                      nestedNavigatorContext: homeNestedContext,
+                      fullscreenDialog: false,
+                    );
+                  }
+                });
+              });
+            } else {
+              // Already on home page, get nested Navigator context and push
+              final homeNestedContext = homeState.getNestedNavigatorContext(WebContentPage.home);
+              if (homeNestedContext != null) {
+                ChuChuNavigator.pushPage(
+                  context,
+                  (context) => CreateCreatorPage(),
+                  nestedNavigatorContext: homeNestedContext,
+                  fullscreenDialog: false,
+                );
+              } else {
+                // If home nested context not ready, wait for it
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                    final homeNestedContext = homeState.getNestedNavigatorContext(WebContentPage.home);
+                    if (homeNestedContext != null) {
+                      ChuChuNavigator.pushPage(
+                        context,
+                        (context) => CreateCreatorPage(),
+                        nestedNavigatorContext: homeNestedContext,
+                        fullscreenDialog: false,
+                      );
+                    }
+                  });
+                });
+              }
+            }
+          }
         } else {
           // On mobile, close drawer first then navigate
           Navigator.of(context).pop();

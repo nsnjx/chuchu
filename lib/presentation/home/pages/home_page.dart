@@ -565,10 +565,44 @@ class HomePageState extends State<HomePage> with SingleTickerProviderStateMixin,
                       _hasNotifications = false;
                     });
 
-                    ChuChuNavigator.pushPage(
-                      context,
+                    // On web, use nested Navigator context; on mobile, use normal navigation
+                    if (kIsWeb) {
+                      // Get nested Navigator context from home page
+                      final homeNestedContext = getNestedNavigatorContext(WebContentPage.home);
+                      if (homeNestedContext != null) {
+                        ChuChuNavigator.pushPage(
+                          context,
                           (context) => FeedNotificationsPage(relayGroupDB: RelayGroup.sharedInstance.myGroups[Account.sharedInstance.currentPubkey]?.value),
-                    );
+                          nestedNavigatorContext: homeNestedContext,
+                          fullscreenDialog: false,
+                        );
+                      } else {
+                        // Fallback: wait for nested Navigator context
+                        WidgetsBinding.instance.addPostFrameCallback((_) {
+                          final homeNestedContext = getNestedNavigatorContext(WebContentPage.home);
+                          if (homeNestedContext != null) {
+                            ChuChuNavigator.pushPage(
+                              context,
+                              (context) => FeedNotificationsPage(relayGroupDB: RelayGroup.sharedInstance.myGroups[Account.sharedInstance.currentPubkey]?.value),
+                              nestedNavigatorContext: homeNestedContext,
+                              fullscreenDialog: false,
+                            );
+                          } else {
+                            // Final fallback: use normal navigation
+                            ChuChuNavigator.pushPage(
+                              context,
+                              (context) => FeedNotificationsPage(relayGroupDB: RelayGroup.sharedInstance.myGroups[Account.sharedInstance.currentPubkey]?.value),
+                            );
+                          }
+                        });
+                      }
+                    } else {
+                      // Mobile: use normal navigation
+                      ChuChuNavigator.pushPage(
+                        context,
+                        (context) => FeedNotificationsPage(relayGroupDB: RelayGroup.sharedInstance.myGroups[Account.sharedInstance.currentPubkey]?.value),
+                      );
+                    }
                   },
                   child: CommonImage(
                     iconName: 'notification.png',
