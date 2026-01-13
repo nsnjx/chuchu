@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:isar/isar.dart';
 
 import 'package:nostr_core_dart/nostr.dart';
@@ -172,6 +173,39 @@ class NoteDBISAR {
     }
   }
 
+  /// Helper function to safely parse int from dynamic value
+  static int? _parseInt(dynamic value) {
+    if (value == null) return null;
+    if (value is int) return value;
+    if (value is num) return value.toInt();
+    if (value is String) {
+      try {
+        return int.parse(value);
+      } catch (e) {
+        try {
+          return double.parse(value).toInt();
+        } catch (e2) {
+          return null;
+        }
+      }
+    }
+    return null;
+  }
+
+  /// Helper function to safely parse bool from dynamic value
+  static bool? _parseBool(dynamic value) {
+    if (value == null) return null;
+    if (value is bool) return value;
+    if (value is String) {
+      final lower = value.toLowerCase();
+      if (lower == 'true' || lower == '1') return true;
+      if (lower == 'false' || lower == '0') return false;
+      return null;
+    }
+    if (value is num) return value != 0;
+    return null;
+  }
+
   static Map<String, dynamic>? decodeNote(String encodedNote) {
     if (encodedNote.startsWith('nostr:')) {
       encodedNote = Nip21.decode(encodedNote)!;
@@ -267,40 +301,41 @@ class NoteDBISAR {
 }
 
 NoteDBISAR _noteInfoFromMap(Map<String, dynamic> map) {
-  return NoteDBISAR(
-    noteId: map['noteId'].toString(),
-    groupId: map['groupId'].toString(),
-    author: map['author'].toString(),
-    createAt: map['createAt'],
-    content: map['content'].toString(),
-    root: map['root'].toString(),
+  try {
+    return NoteDBISAR(
+    noteId: map['noteId']?.toString() ?? '',
+    groupId: map['groupId']?.toString() ?? '',
+    author: map['author']?.toString() ?? '',
+    createAt: NoteDBISAR._parseInt(map['createAt']) ?? 0,
+    content: map['content']?.toString() ?? '',
+    root: map['root']?.toString() ?? '',
     rootRelay: map['rootRelay']?.toString(),
     reply: map['reply']?.toString(),
     replyRelay: map['replyRelay']?.toString(),
     mentions: NoteDBISAR.decodeStringList(map['mentions']?.toString()),
     pTags: NoteDBISAR.decodeStringList(map['pTags']?.toString()),
     hashTags: NoteDBISAR.decodeStringList(map['hashTags']?.toString()),
-    private: map['private'],
-    read: map['read'],
+    private: NoteDBISAR._parseBool(map['private']) ?? false,
+    read: NoteDBISAR._parseBool(map['read']) ?? false,
     warning: map['warning']?.toString(),
-    repostId: map['repostId']?.toString(),
-    quoteRepostId: map['quoteRepostId']?.toString(),
-    reactedId: map['reactedId']?.toString(),
+    repostId: map['repostId']?.toString() ?? '',
+    quoteRepostId: map['quoteRepostId']?.toString() ?? '',
+    reactedId: map['reactedId']?.toString() ?? '',
     reactedKind: map['reactedKind']?.toString(),
     emojiShortcode: map['emojiShortcode']?.toString(),
     emojiURL: map['emojiURL']?.toString(),
-    replyCount: map['replyCount'],
-    repostCount: map['repostCount'],
-    quoteRepostCount: map['quoteRepostCount'],
-    reactionCount: map['reactionCount'],
-    zapCount: map['zapCount'],
-    zapAmount: map['zapAmount'],
-    replyCountByMe: map['replyCountByMe'],
-    repostCountByMe: map['repostCountByMe'],
-    quoteRepostCountByMe: map['quoteRepostCountByMe'],
-    reactionCountByMe: map['reactionCountByMe'],
-    zapCountByMe: map['zapCountByMe'],
-    zapAmountByMe: map['zapAmountByMe'],
+    replyCount: NoteDBISAR._parseInt(map['replyCount']) ?? 0,
+    repostCount: NoteDBISAR._parseInt(map['repostCount']) ?? 0,
+    quoteRepostCount: NoteDBISAR._parseInt(map['quoteRepostCount']) ?? 0,
+    reactionCount: NoteDBISAR._parseInt(map['reactionCount']) ?? 0,
+    zapCount: NoteDBISAR._parseInt(map['zapCount']) ?? 0,
+    zapAmount: NoteDBISAR._parseInt(map['zapAmount']) ?? 0,
+    replyCountByMe: NoteDBISAR._parseInt(map['replyCountByMe']) ?? 0,
+    repostCountByMe: NoteDBISAR._parseInt(map['repostCountByMe']) ?? 0,
+    quoteRepostCountByMe: NoteDBISAR._parseInt(map['quoteRepostCountByMe']) ?? 0,
+    reactionCountByMe: NoteDBISAR._parseInt(map['reactionCountByMe']) ?? 0,
+    zapCountByMe: NoteDBISAR._parseInt(map['zapCountByMe']) ?? 0,
+    zapAmountByMe: NoteDBISAR._parseInt(map['zapAmountByMe']) ?? 0,
     rawEvent: map['rawEvent']?.toString(),
     replyEventIds:
         NoteDBISAR.decodeStringList(map['replyEventIds']?.toString()),
@@ -311,6 +346,12 @@ NoteDBISAR _noteInfoFromMap(Map<String, dynamic> map) {
     reactionEventIds:
         NoteDBISAR.decodeStringList(map['reactionEventIds']?.toString()),
     zapEventIds: NoteDBISAR.decodeStringList(map['zapEventIds']?.toString()),
-    lastUpdatedTimeString: map['lastUpdatedTime'].toString(),
+    lastUpdatedTimeString: map['lastUpdatedTime']?.toString() ?? map['lastUpdatedTimeString']?.toString() ?? '',
   );
+  } catch (e, stackTrace) {
+    debugPrint('[DB-Web] ❌ NoteDBISAR._noteInfoFromMap error: $e');
+    debugPrint('[DB-Web] ❌ Map keys: ${map.keys.toList()}');
+    debugPrint('[DB-Web] ❌ Stack trace: $stackTrace');
+    rethrow;
+  }
 }

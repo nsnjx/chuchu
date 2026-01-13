@@ -82,8 +82,15 @@ class Account {
   }
 
   Future<void> _loadAllUsers() async {
-    var queryBuilder = DBISAR.sharedInstance.isar.userDBISARs.where();
-    List<UserDBISAR?> maps = await queryBuilder.findAll();
+    List<UserDBISAR?> maps;
+    if (kIsWeb) {
+      // Web platform uses dedicated methods
+      maps = await DBISAR.sharedInstance.findAllUsers();
+    } else {
+      // Mobile platform uses Isar
+      var queryBuilder = DBISAR.sharedInstance.isar.userDBISARs.where();
+      maps = await queryBuilder.findAll();
+    }
     for (UserDBISAR? user in maps) {
       if (user != null) {
         user = user.withGrowableLevels();
@@ -191,8 +198,14 @@ class Account {
   }
 
   Future<UserDBISAR?> _searchUserFromDB(String pubkey) async {
-    UserDBISAR? user =
-        await DBISAR.sharedInstance.isar.userDBISARs.where().pubKeyEqualTo(pubkey).findFirst();
+    UserDBISAR? user;
+    if (kIsWeb) {
+      // Web platform uses dedicated methods
+      user = await DBISAR.sharedInstance.findUserByPubKey(pubkey);
+    } else {
+      // Mobile platform uses Isar
+      user = await DBISAR.sharedInstance.isar.userDBISARs.where().pubKeyEqualTo(pubkey).findFirst();
+    }
     if (user != null) {
       user = user.withGrowableLevels();
       userCache[user.pubKey] = ValueNotifier<UserDBISAR>(user);

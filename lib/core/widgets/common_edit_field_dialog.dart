@@ -138,7 +138,7 @@ class _CommonEditFieldDialogState extends State<CommonEditFieldDialog> {
             ),
           ),
         ),
-        // Dialog 内容
+        // Dialog content
         Center(
           child: Dialog(
             shape: RoundedRectangleBorder(

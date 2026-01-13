@@ -19,7 +19,14 @@ class EventCache {
   final cacheTimeStamp = 24 * 60 * 60 * 7;
 
   Future<void> loadAllEventsFromDB() async {
-    List<EventDBISAR> eventDBs = await DBISAR.sharedInstance.isar.eventDBISARs.where().findAll();
+    List<EventDBISAR> eventDBs;
+    if (kIsWeb) {
+      // Web platform uses dedicated methods
+      eventDBs = await DBISAR.sharedInstance.findAllEvents();
+    } else {
+      // Mobile platform uses Isar
+      eventDBs = await DBISAR.sharedInstance.isar.eventDBISARs.where().findAll();
+    }
     List<int> expiredEvents = [];
     for (var eventDB in eventDBs) {
       if (eventDB.expiration != null &&
@@ -33,18 +40,32 @@ class EventCache {
       cacheIds.add(eventDB.eventId);
     }
 
-    if (expiredEvents.isEmpty || kIsWeb) return;
-    DBISAR.sharedInstance.isar.write((isar) {
-      int result = DBISAR.sharedInstance.isar.eventDBISARs.deleteAll(expiredEvents);
-      LogUtils.v(() => 'Deleted event caches: $result');
-    });
+    if (expiredEvents.isEmpty) return;
+    
+    if (kIsWeb) {
+      // Web platform uses dedicated methods
+      await DBISAR.sharedInstance.deleteEvents(expiredEvents);
+      LogUtils.v(() => 'Deleted event caches: ${expiredEvents.length}');
+    } else {
+      // Mobile platform uses Isar
+      DBISAR.sharedInstance.isar.write((isar) {
+        int result = DBISAR.sharedInstance.isar.eventDBISARs.deleteAll(expiredEvents);
+        LogUtils.v(() => 'Deleted event caches: $result');
+      });
+    }
   }
 
   Future<EventDBISAR?> loadEventFromDB(String eventId) async {
-    return await DBISAR.sharedInstance.isar.eventDBISARs
-        .where()
-        .eventIdEqualTo(eventId)
-        .findFirst();
+    if (kIsWeb) {
+      // Web platform uses dedicated methods
+      return await DBISAR.sharedInstance.findEventByEventId(eventId);
+    } else {
+      // Mobile platform uses Isar
+      return await DBISAR.sharedInstance.isar.eventDBISARs
+          .where()
+          .eventIdEqualTo(eventId)
+          .findFirst();
+    }
   }
 
   Future<void> saveEventToDB(EventDBISAR eventDB) async {

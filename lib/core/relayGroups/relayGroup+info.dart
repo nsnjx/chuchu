@@ -176,10 +176,16 @@ extension EInfo on RelayGroup {
   }
 
   Future<List<RelayGroupDBISAR>> searchGroupsFromDB(List<String> relays) async {
-    return await DBISAR.sharedInstance.isar.relayGroupDBISARs
-        .where()
-        .anyOf(relays, (q, relay) => q.relayEqualTo(relay))
-        .findAll();
+    if (kIsWeb) {
+      // Web platform uses dedicated methods
+      return await DBISAR.sharedInstance.searchRelayGroupsByRelays(relays);
+    } else {
+      // Mobile platform uses Isar
+      return await DBISAR.sharedInstance.isar.relayGroupDBISARs
+          .where()
+          .anyOf(relays, (q, relay) => q.relayEqualTo(relay))
+          .findAll();
+    }
   }
 
   Future<List<RelayGroupDBISAR>> searchAllGroupsFromRelays(
@@ -296,11 +302,9 @@ extension EInfo on RelayGroup {
       } else if (event.kind == 39002) {
         groupDB = handleGroupMembers(event, relay);
 
-        if (groupDB != null) {
-          List<String>? members = groupDB.members;
-          if (members != null && members.isNotEmpty && members.contains(pubkey)) {
-            result[groupDB.groupId] = groupDB;
-          }
+        List<String>? members = groupDB?.members;
+        if (members != null && members.isNotEmpty && members.contains(pubkey)) {
+          result[groupDB!.groupId] = groupDB;
         }
       }
     }, eoseCallBack: (requestId, ok, relay, unCompletedRelays) async {

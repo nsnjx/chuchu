@@ -7,7 +7,6 @@ import 'package:chuchu/core/feed/feed+load.dart';
 import 'package:chuchu/core/feed/feed+notification.dart';
 import 'package:http/http.dart' as http;
 import 'package:isar/isar.dart' hide Filter;
-import 'package:decimal/decimal.dart';
 import '../contacts/contacts.dart';
 import '../database/db_isar.dart';
 import '../feed/feed.dart';

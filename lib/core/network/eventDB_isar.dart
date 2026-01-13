@@ -60,6 +60,32 @@ class EventDBISAR {
   set eventReceiveStatus(List<EventStatusISAR> statuses) {
     eventReceiveStatusJson = jsonEncode(statuses);
   }
+
+  static EventDBISAR fromMap(Map<String, dynamic> map) {
+    return EventDBISAR(
+      eventId: map['eventId']?.toString() ?? '',
+      rawData: map['rawData']?.toString() ?? '',
+      expiration: (map['expiration'] as num?)?.toInt(),
+      eventSendStatus: map['eventSendStatusJson'] != null
+          ? _parseEventStatusList(map['eventSendStatusJson'])
+          : null,
+      eventReceiveStatus: map['eventReceiveStatusJson'] != null
+          ? _parseEventStatusList(map['eventReceiveStatusJson'])
+          : null,
+    )..id = (map['id'] as num?)?.toInt() ?? 0;
+  }
+
+  static List<EventStatusISAR>? _parseEventStatusList(dynamic jsonString) {
+    if (jsonString == null) return null;
+    try {
+      final String jsonStr = jsonString is String ? jsonString : jsonString.toString();
+      if (jsonStr.isEmpty) return null;
+      List<dynamic> decodedJson = jsonDecode(jsonStr);
+      return decodedJson.map((e) => EventStatusISAR.fromJson(e as Map<String, dynamic>)).toList();
+    } catch (e) {
+      return null;
+    }
+  }
 }
 
 class EventStatusISAR {

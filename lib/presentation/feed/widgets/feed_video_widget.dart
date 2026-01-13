@@ -1,6 +1,7 @@
-import 'dart:io';
+import 'dart:io' if (dart.library.html) 'package:chuchu/core/account/platform_stub.dart';
 
 import 'package:chuchu/core/utils/adapt.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:video_thumbnail/video_thumbnail.dart';
@@ -60,6 +61,14 @@ class _FeedVideoWidgetState extends State<FeedVideoWidget> {
 
   Future<void> _generateThumbnail() async {
     if (widget.videoUrl.isEmpty || _isLoadingThumbnail) return;
+    
+    // Web platform doesn't support file system operations, skip thumbnail generation
+    if (kIsWeb) {
+      setState(() {
+        _isLoadingThumbnail = false;
+      });
+      return;
+    }
 
     setState(() {
       _isLoadingThumbnail = true;
@@ -104,6 +113,7 @@ class _FeedVideoWidgetState extends State<FeedVideoWidget> {
   }
 
   Future<File?> _getCachedThumbnail() async {
+    if (kIsWeb) return null; // Web platform doesn't support file cache
     try {
       final cacheKey = _getThumbnailCacheKey();
       final cacheDir = await getTemporaryDirectory();
@@ -122,6 +132,7 @@ class _FeedVideoWidgetState extends State<FeedVideoWidget> {
   }
 
   Future<File?> _createThumbnail() async {
+    if (kIsWeb) return null; // Web platform doesn't support file system operations
     try {
       final tempDir = await getTemporaryDirectory();
       
@@ -147,6 +158,7 @@ class _FeedVideoWidgetState extends State<FeedVideoWidget> {
   }
 
   Future<void> _cacheThumbnail(File thumbnailFile) async {
+    if (kIsWeb) return; // Web platform doesn't support file cache
     try {
       final cacheKey = _getThumbnailCacheKey();
       final cacheDir = await getTemporaryDirectory();
@@ -240,6 +252,11 @@ class _FeedVideoWidgetState extends State<FeedVideoWidget> {
 
   Widget _getPicWidget() {
     if (_thumbnailFile == null) return errorVideoWidget();
+    
+    // Web platform doesn't support Image.file, use placeholder
+    if (kIsWeb) {
+      return errorVideoWidget();
+    }
 
     return Container(
       width: double.infinity,
@@ -247,7 +264,7 @@ class _FeedVideoWidgetState extends State<FeedVideoWidget> {
       child: ClipRRect(
         borderRadius: BorderRadius.circular(Adapt.px(12)),
         child: Image.file(
-          _thumbnailFile!,
+          _thumbnailFile! as dynamic, // Cast to dynamic to avoid type mismatch on web
           width: double.infinity,
           // height: double.infinity, // Remove fixed height to allow image to scale proportionally
           fit: BoxFit.cover,

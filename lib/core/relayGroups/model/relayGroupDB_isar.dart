@@ -154,25 +154,28 @@ class RelayGroupDBISAR {
 
 RelayGroupDBISAR _groupInfoFromMap(Map<String, dynamic> map) {
   return RelayGroupDBISAR(
-    groupId: map['groupId'].toString(),
-    author: map['author'].toString(),
-    relay: map['relay'].toString(),
-    relayPubkey: map['relayPubkey'].toString(),
-    private: map['private'],
-    closed: map['closed'],
-    lastUpdatedTime: map['lastUpdatedTime'],
-    mute: map['mute'],
-    adminsString: map['adminsString'].toString(),
-    name: map['name'].toString(),
-    about: map['about'].toString(),
-    picture: map['picture'].toString(),
-    pinned: UserDBISAR.decodeStringList(map['pinned'].toString()),
-    members: UserDBISAR.decodeStringList(map['members'].toString()),
-    level: map['level'],
-    point: map['point'],
-    subscriptionAmount: map['subscriptionAmount'] ?? 0,
+    groupId: map['groupId']?.toString() ?? '',
+    author: map['author']?.toString() ?? '',
+    relay: map['relay']?.toString() ?? '',
+    relayPubkey: map['relayPubkey']?.toString() ?? '',
+    private: map['private'] as bool? ?? false,
+    closed: map['closed'] as bool? ?? false,
+    lastUpdatedTime: (map['lastUpdatedTime'] as num?)?.toInt() ?? 0,
+    lastMembersUpdatedTime: (map['lastMembersUpdatedTime'] as num?)?.toInt() ?? 0,
+    lastAdminsUpdatedTime: (map['lastAdminsUpdatedTime'] as num?)?.toInt() ?? 0,
+    mute: map['mute'] as bool? ?? false,
+    adminsString: map['adminsString']?.toString(),
+    name: map['name']?.toString() ?? '',
+    about: map['about']?.toString() ?? '',
+    picture: map['picture']?.toString() ?? '',
+    pinned: UserDBISAR.decodeStringList(map['pinned']?.toString() ?? ''),
+    members: UserDBISAR.decodeStringList(map['members']?.toString() ?? ''),
+    memberSubscriptionExpiryJson: map['memberSubscriptionExpiryJson']?.toString(),
+    level: (map['level'] as num?)?.toInt() ?? 0,
+    point: (map['point'] as num?)?.toInt() ?? 0,
+    subscriptionAmount: (map['subscriptionAmount'] as num?)?.toInt() ?? 0,
     groupWalletId: map['groupWalletId']?.toString() ?? '',
-  );
+  )..id = (map['id'] as num?)?.toInt() ?? 0;
 }
 
 extension RelayGroupDBISARSubscription on RelayGroupDBISAR {

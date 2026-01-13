@@ -1,5 +1,6 @@
 import 'package:http/http.dart' as http;
 import 'package:isar/isar.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import '../config/config.dart';
 import '../database/db_isar.dart';
 import '../network/connect.dart';
@@ -76,8 +77,14 @@ class Relays {
   }
 
   Future<List<RelayDBISAR>?> _loadRelaysFromDB() async {
-    final isar = DBISAR.sharedInstance.isar;
-    return await isar.relayDBISARs.where().findAll();
+    if (kIsWeb) {
+      // Web platform uses dedicated methods
+      return await DBISAR.sharedInstance.findAllRelays();
+    } else {
+      // Mobile platform uses Isar
+      final isar = DBISAR.sharedInstance.isar;
+      return await isar.relayDBISARs.where().findAll();
+    }
   }
 
   Future<void> syncRelaysToDB({String? r}) async {

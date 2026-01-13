@@ -29,8 +29,21 @@ class File {
   Future<File> create({bool recursive = false}) async => this;
   File createSync({bool recursive = false}) => this;
   Future<void> delete({bool recursive = false}) async {}
+  void deleteSync({bool recursive = false}) {}
   String readAsStringSync({Encoding encoding = Encoding.utf8}) => '';
   Future<String> readAsString({Encoding encoding = Encoding.utf8}) async => '';
+  Future<File> writeAsString(String contents, {Encoding encoding = Encoding.utf8, FileMode mode = FileMode.write}) async {
+    throw UnsupportedError('File write operations not supported on web');
+  }
+  File writeAsStringSync(String contents, {Encoding encoding = Encoding.utf8, FileMode mode = FileMode.write}) {
+    throw UnsupportedError('File write operations not supported on web');
+  }
+  Future<File> copy(String newPath) async {
+    throw UnsupportedError('File copy operations not supported on web');
+  }
+  File copySync(String newPath) {
+    throw UnsupportedError('File copy operations not supported on web');
+  }
   // Note: Uint8List is from dart:typed_data, available on all platforms
   // Using dynamic to avoid import issues
   Future<dynamic> readAsBytes() async => _readBytes();
@@ -58,11 +71,18 @@ class Directory {
   final String path;
   Directory(this.path);
   
+  Directory get absolute => this;
+  
   bool existsSync() => false;
   Future<bool> exists() async => false;
   Future<Directory> create({bool recursive = false}) async => this;
   Directory createSync({bool recursive = false}) => this;
   Future<void> delete({bool recursive = false}) async {}
+  void deleteSync({bool recursive = false}) {}
+  
+  Stream<dynamic> list({bool recursive = false, bool followLinks = true}) {
+    return Stream.empty();
+  }
 }
 
 // Stub for HttpOverrides (can be extended like the real one)
@@ -112,6 +132,15 @@ class SocketException implements Exception {
 class HttpException implements Exception {
   final String message;
   HttpException(this.message);
+}
+
+// Stub for FileMode
+enum FileMode {
+  read,
+  write,
+  append,
+  writeOnly,
+  writeOnlyAppend,
 }
 
 // Stub for Encoding

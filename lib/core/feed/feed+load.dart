@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'package:chuchu/core/contacts/contacts+blocklist.dart';
 import 'package:chuchu/core/feed/feed+notification.dart';
-import 'package:flutter/foundation.dart' show kDebugMode, kIsWeb;
+import 'package:flutter/foundation.dart' show kDebugMode, kIsWeb, debugPrint;
 import 'package:isar/isar.dart' hide Filter;
 
 import '../account/account.dart';
@@ -486,10 +486,17 @@ extension Load on Feed {
   Future<List<NoteDBISAR>?> loadHashTagsFromRelay(List<String> hashTags,
       {int limit = 30, int? until}) async {
     List<NoteDBISAR> returnResult = [];
-    List<NoteDBISAR> searchResult = await DBISAR.sharedInstance.isar.noteDBISARs
-        .where()
-        .anyOf(hashTags, (q, hashTag) => q.hashTagsElementEqualTo(hashTag))
-        .findAll();
+    List<NoteDBISAR> searchResult;
+    if (kIsWeb) {
+      // Web platform uses dedicated methods
+      searchResult = await DBISAR.sharedInstance.searchNotesByHashTags(hashTags, limit: limit);
+    } else {
+      // Mobile platform uses Isar
+      searchResult = await DBISAR.sharedInstance.isar.noteDBISARs
+          .where()
+          .anyOf(hashTags, (q, hashTag) => q.hashTagsElementEqualTo(hashTag))
+          .findAll();
+    }
     for (var note in searchResult) {
       note = note.withGrowableLevels();
       returnResult.add(note);
@@ -776,9 +783,6 @@ extension Load on Feed {
       if (noteId != null) {
         queryBuilder = (queryBuilder as QueryBuilder<NoteDBISAR, NoteDBISAR, QFilterCondition>)
             .noteIdEqualTo(noteId);
-        if (isWeb && queryBuilder == null) {
-          return _finalizeNoteResults(aggregated, limit);
-        }
       }
       
       if (groupId != null && groupId.isNotEmpty) {
@@ -790,64 +794,40 @@ extension Load on Feed {
               .groupIdIsEmpty();
         }
       }
-      if (isWeb && queryBuilder == null) {
-        return _finalizeNoteResults(aggregated, limit);
-      }
       
       if (authors != null) {
         queryBuilder = (queryBuilder as QueryBuilder<NoteDBISAR, NoteDBISAR, QFilterCondition>)
             .anyOf(authors, (q, author) => q.authorEqualTo(author));
-        if (isWeb && queryBuilder == null) {
-          return _finalizeNoteResults(aggregated, limit);
-        }
       }
       
       if (root != null) {
         queryBuilder = (queryBuilder as QueryBuilder<NoteDBISAR, NoteDBISAR, QFilterCondition>)
             .rootEqualTo(root);
-        if (isWeb && queryBuilder == null) {
-          return _finalizeNoteResults(aggregated, limit);
-        }
       }
       
       if (reply != null) {
         queryBuilder = (queryBuilder as QueryBuilder<NoteDBISAR, NoteDBISAR, QFilterCondition>)
             .replyEqualTo(reply);
-        if (isWeb && queryBuilder == null) {
-          return _finalizeNoteResults(aggregated, limit);
-        }
       }
       
       if (repostId != null) {
         queryBuilder = (queryBuilder as QueryBuilder<NoteDBISAR, NoteDBISAR, QFilterCondition>)
             .repostIdEqualTo(repostId);
-        if (isWeb && queryBuilder == null) {
-          return _finalizeNoteResults(aggregated, limit);
-        }
       }
       
       if (quoteRepostId != null) {
         queryBuilder = (queryBuilder as QueryBuilder<NoteDBISAR, NoteDBISAR, QFilterCondition>)
             .quoteRepostIdEqualTo(quoteRepostId);
-        if (isWeb && queryBuilder == null) {
-          return _finalizeNoteResults(aggregated, limit);
-        }
       }
       
       if (reactedId != null) {
         queryBuilder = (queryBuilder as QueryBuilder<NoteDBISAR, NoteDBISAR, QFilterCondition>)
             .reactedIdEqualTo(reactedId);
-        if (isWeb && queryBuilder == null) {
-          return _finalizeNoteResults(aggregated, limit);
-        }
       }
       
       if (until != null) {
         queryBuilder = (queryBuilder as QueryBuilder<NoteDBISAR, NoteDBISAR, QFilterCondition>)
             .createAtLessThan(until);
-        if (isWeb && queryBuilder == null) {
-          return _finalizeNoteResults(aggregated, limit);
-        }
       }
       
       if (isReacted != null) {
@@ -866,13 +846,6 @@ extension Load on Feed {
       
       if (keyword != null) {
         queryBuilder = queryBuilder.contentContains(keyword);
-        if (isWeb && queryBuilder == null) {
-          return _finalizeNoteResults(aggregated, limit);
-        }
-      }
-      
-      if (queryBuilder == null) {
-        return _finalizeNoteResults(aggregated, limit);
       }
       
       var allNotes = await (queryBuilder as QueryBuilder<NoteDBISAR, NoteDBISAR, QOperations>).findAll();
@@ -905,12 +878,15 @@ extension Load on Feed {
     int? limit,
     String? keyword,
   }) async {
+    debugPrint('[DB-Web] 🔵🔵🔵 loadAllMyGroupsNotesFromDB METHOD CALLED! isWeb: ${kIsWeb}');
     // Get all group IDs that the current user has joined
     List<String> myGroupIds = RelayGroup.sharedInstance.myGroups.keys.toList();
+    debugPrint('[DB-Web] 🔵 myGroupIds count: ${myGroupIds.length}, ids: $myGroupIds');
     
-    // If user has no groups, return empty list
+    // If user has no groups, we still query the database to see if there's any data
+    // This helps debug whether the issue is empty groups or empty database
     if (myGroupIds.isEmpty) {
-      return [];
+      debugPrint('[DB-Web] ⚠️ No groups found, but will still query database to check for data');
     }
 
     final bool isWeb = kIsWeb;
@@ -933,93 +909,143 @@ extension Load on Feed {
       keyword: keyword,
     ));
 
+    // Web platform uses IndexedDB, mobile platform uses Isar
+    if (isWeb) {
+      try {
+        debugPrint('[DB-Web] 🔵 Starting Web query, myGroupIds: $myGroupIds');
+        // Web platform: use IndexedDB query
+        final indexedDB = DBISAR.sharedInstance.indexedDB;
+        if (indexedDB == null) {
+          debugPrint('[DB-Web] ❌ IndexedDB is null');
+          return _finalizeNoteResults(aggregated, limit);
+        }
+        if (!indexedDB.isOpen) {
+          debugPrint('[DB-Web] ❌ IndexedDB is not open, isOpen: ${indexedDB.isOpen}');
+          return _finalizeNoteResults(aggregated, limit);
+        }
+        
+        debugPrint('[DB-Web] 🔵 Getting collection: noteDBISARs');
+        final collection = indexedDB.getCollection<NoteDBISAR>('noteDBISARs');
+        final query = collection.where();
+        
+        debugPrint('[DB-Web] 🔵 Calling findAll()...');
+        // Apply groupId filter (anyOf needs manual implementation in IndexedDB)
+        // First get all notes, then filter in memory
+        List<NoteDBISAR> allNotes = await query.findAll();
+        debugPrint('[DB-Web] 🔵 Found ${allNotes.length} total notes from IndexedDB');
+        debugPrint('[DB-Web] 🔵 Filtering by groupIds: $myGroupIds');
+        
+        // Filter in memory: only keep notes whose groupId is in myGroupIds
+        // If myGroupIds is empty, show all notes (for debugging)
+        if (myGroupIds.isNotEmpty) {
+          allNotes = allNotes.where((note) => myGroupIds.contains(note.groupId)).toList();
+          debugPrint('[DB-Web] 🔵 After groupId filter: ${allNotes.length} notes');
+        } else {
+          debugPrint('[DB-Web] ⚠️ myGroupIds is empty, showing all ${allNotes.length} notes (for debugging)');
+        }
+        
+        // Apply other filter conditions
+        if (authors != null && authors.isNotEmpty) {
+          allNotes = allNotes.where((note) => authors.contains(note.author)).toList();
+        }
+        if (root != null) {
+          allNotes = allNotes.where((note) => note.root == root).toList();
+        }
+        if (reply != null) {
+          allNotes = allNotes.where((note) => note.reply == reply).toList();
+        }
+        if (repostId != null) {
+          allNotes = allNotes.where((note) => note.repostId == repostId).toList();
+        }
+        if (quoteRepostId != null) {
+          allNotes = allNotes.where((note) => note.quoteRepostId == quoteRepostId).toList();
+        }
+        if (reactedId != null) {
+          allNotes = allNotes.where((note) => note.reactedId == reactedId).toList();
+        }
+        if (until != null) {
+          allNotes = allNotes.where((note) => note.createAt < until).toList();
+        }
+        if (isReacted != null) {
+          if (isReacted) {
+            allNotes = allNotes.where((note) => note.reactedId != null && note.reactedId!.isNotEmpty).toList();
+          } else {
+            allNotes = allNotes.where((note) => note.reactedId == null || note.reactedId!.isEmpty).toList();
+          }
+        }
+        if (private != null) {
+          allNotes = allNotes.where((note) => note.private == private).toList();
+        }
+        if (keyword != null && keyword.isNotEmpty) {
+          allNotes = allNotes.where((note) => 
+            note.content != null && note.content!.toLowerCase().contains(keyword.toLowerCase())
+          ).toList();
+        }
+        
+        // Sort by createAt in descending order
+        allNotes.sort((a, b) => b.createAt.compareTo(a.createAt));
+        debugPrint('[DB-Web] 🔵 After sorting: ${allNotes.length} notes');
+        
+        // Apply limit
+        if (limit != null && limit > 0) {
+          allNotes = allNotes.take(limit).toList();
+          debugPrint('[DB-Web] 🔵 After limit ($limit): ${allNotes.length} notes');
+        }
+        
+        addNotes(allNotes);
+        debugPrint('[DB-Web] 🔵 Final aggregated count: ${aggregated.length} notes');
+        final result = _finalizeNoteResults(aggregated, limit);
+        debugPrint('[DB-Web] 🔵 Final result count: ${result.length} notes');
+        return result;
+      } catch (e, stackTrace) {
+        debugPrint('[DB-Web] ❌ Error in Web query: $e');
+        debugPrint('[DB-Web] ❌ Stack trace: $stackTrace');
+        return _finalizeNoteResults(aggregated, limit);
+      }
+    }
+    
+    // Mobile platform: use Isar
     final isar = DBISAR.sharedInstance.isar;
     if (!isar.isOpen) {
       return _finalizeNoteResults(aggregated, limit);
     }
     
     try {
-      dynamic queryBuilder = isar.noteDBISARs.where();
-      if (queryBuilder == null) {
-        return _finalizeNoteResults(aggregated, limit);
-      }
+      var queryBuilder = isar.noteDBISARs.where() as QueryBuilder<NoteDBISAR, NoteDBISAR, QFilterCondition>;
       
-      queryBuilder = (queryBuilder as QueryBuilder<NoteDBISAR, NoteDBISAR, QFilterCondition>)
+      queryBuilder = queryBuilder
           .anyOf(myGroupIds, (q, groupId) => q.groupIdEqualTo(groupId));
-      if (isWeb && queryBuilder == null) {
-        return _finalizeNoteResults(aggregated, limit);
-      }
       
       if (authors != null) {
-        queryBuilder = (queryBuilder as QueryBuilder<NoteDBISAR, NoteDBISAR, QFilterCondition>)
+        queryBuilder = queryBuilder
             .anyOf(authors, (q, author) => q.authorEqualTo(author));
-        if (isWeb && queryBuilder == null) {
-          return _finalizeNoteResults(aggregated, limit);
-        }
       }
       if (root != null) {
-        queryBuilder = (queryBuilder as QueryBuilder<NoteDBISAR, NoteDBISAR, QFilterCondition>)
-            .rootEqualTo(root);
-        if (isWeb && queryBuilder == null) {
-          return _finalizeNoteResults(aggregated, limit);
-        }
+        queryBuilder = queryBuilder.rootEqualTo(root);
       }
       if (reply != null) {
-        queryBuilder = (queryBuilder as QueryBuilder<NoteDBISAR, NoteDBISAR, QFilterCondition>)
-            .replyEqualTo(reply);
-        if (isWeb && queryBuilder == null) {
-          return _finalizeNoteResults(aggregated, limit);
-        }
+        queryBuilder = queryBuilder.replyEqualTo(reply);
       }
       if (repostId != null) {
-        queryBuilder = (queryBuilder as QueryBuilder<NoteDBISAR, NoteDBISAR, QFilterCondition>)
-            .repostIdEqualTo(repostId);
-        if (isWeb && queryBuilder == null) {
-          return _finalizeNoteResults(aggregated, limit);
-        }
+        queryBuilder = queryBuilder.repostIdEqualTo(repostId);
       }
       if (quoteRepostId != null) {
-        queryBuilder = (queryBuilder as QueryBuilder<NoteDBISAR, NoteDBISAR, QFilterCondition>)
-            .quoteRepostIdEqualTo(quoteRepostId);
-        if (isWeb && queryBuilder == null) {
-          return _finalizeNoteResults(aggregated, limit);
-        }
+        queryBuilder = queryBuilder.quoteRepostIdEqualTo(quoteRepostId);
       }
       if (reactedId != null) {
-        queryBuilder = (queryBuilder as QueryBuilder<NoteDBISAR, NoteDBISAR, QFilterCondition>)
-            .reactedIdEqualTo(reactedId);
-        if (isWeb && queryBuilder == null) {
-          return _finalizeNoteResults(aggregated, limit);
-        }
+        queryBuilder = queryBuilder.reactedIdEqualTo(reactedId);
       }
       if (until != null) {
-        queryBuilder = (queryBuilder as QueryBuilder<NoteDBISAR, NoteDBISAR, QFilterCondition>)
-            .createAtLessThan(until);
-        if (isWeb && queryBuilder == null) {
-          return _finalizeNoteResults(aggregated, limit);
-        }
+        queryBuilder = queryBuilder.createAtLessThan(until);
       }
       if (isReacted != null) {
         queryBuilder = isReacted ? queryBuilder.reactedIdIsNotEmpty() : queryBuilder.reactedIdIsEmpty();
-        if (isWeb && queryBuilder == null) {
-          return _finalizeNoteResults(aggregated, limit);
-        }
       }
       if (private != null) {
         queryBuilder = queryBuilder.privateEqualTo(private);
-        if (isWeb && queryBuilder == null) {
-          return _finalizeNoteResults(aggregated, limit);
-        }
       }
       if (keyword != null) {
         queryBuilder = queryBuilder.contentContains(keyword);
-        if (isWeb && queryBuilder == null) {
-          return _finalizeNoteResults(aggregated, limit);
-        }
-      }
-      
-      if (queryBuilder == null) {
-        return _finalizeNoteResults(aggregated, limit);
       }
       
       var allNotes = await (queryBuilder as QueryBuilder<NoteDBISAR, NoteDBISAR, QOperations>).findAll();
@@ -1043,9 +1069,13 @@ extension Load on Feed {
       // ignore: avoid_print
       print('[Feed] handleNewNotes cached noteId=${noteDB.noteId} groupId=${noteDB.groupId}');
     }
+    debugPrint('[DB-Web] 🔵 handleNewNotes: noteId=${noteDB.noteId}, createAt=${noteDB.createAt}, latestNoteTime=$latestNoteTime');
     if (noteDB.createAt > latestNoteTime) {
       newNotes.add(noteDB);
+      debugPrint('[DB-Web] 🔵 handleNewNotes: Added to newNotes, count=${newNotes.length}, callback=${newNotesCallBack != null}');
       newNotesCallBack?.call(newNotes);
+    } else {
+      debugPrint('[DB-Web] ⚠️ handleNewNotes: Note createAt (${noteDB.createAt}) <= latestNoteTime ($latestNoteTime), not adding to newNotes');
     }
     // Check if this note mentions the current user (notification condition)
     bool hasPTag = noteDB.pTags?.contains(pubkey) == true;

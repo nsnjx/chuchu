@@ -1,6 +1,7 @@
 import 'package:path_provider/path_provider.dart';
 import 'dart:convert' as convert;
-import 'dart:io';
+import 'dart:io' if (dart.library.html) 'package:chuchu/core/account/platform_stub.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 
 import 'chuchu_base_cache.dart';
 
@@ -85,6 +86,10 @@ class ChuChuFileCache extends ChuChuBaseCache {
   }
 
   Future<Directory> _getCacheDir() async {
+    if (kIsWeb) {
+      // Web platform doesn't support file system operations, return a virtual directory
+      throw UnsupportedError('File cache is not supported on web platform. Use IndexedDB or localStorage instead.');
+    }
     final directory = await getApplicationDocumentsDirectory();
     final filePath = directory.path + '/{$chuchuFilePath}';
     Directory dir = new Directory(filePath);
@@ -94,6 +99,10 @@ class ChuChuFileCache extends ChuChuBaseCache {
   }
 
   Future<Directory> _getForeverCacheDir() async {
+    if (kIsWeb) {
+      // Web platform doesn't support file system operations, return a virtual directory
+      throw UnsupportedError('File cache is not supported on web platform. Use IndexedDB or localStorage instead.');
+    }
     final directory = await getApplicationDocumentsDirectory();
     final filePath = directory.path + '/{$foreverPath}';
     Directory dir = new Directory(filePath);

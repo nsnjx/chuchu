@@ -531,8 +531,15 @@ class Wallet {
   /// Load transactions from database
   Future<List<WalletTransaction>> _loadTransactionsFromDB() async {
     try {
-      final isar = DBISAR.sharedInstance.isar;
-      final transactions = await isar.walletTransactions.where().findAll();
+      List<WalletTransaction> transactions;
+      if (kIsWeb) {
+        // Web platform uses dedicated methods
+        transactions = await DBISAR.sharedInstance.findAllWalletTransactions();
+      } else {
+        // Mobile platform uses Isar
+        final isar = DBISAR.sharedInstance.isar;
+        transactions = await isar.walletTransactions.where().findAll();
+      }
       LogUtils.d(() => 'Loaded ${transactions.length} transactions from database');
       return transactions;
     } catch (e) {
@@ -545,8 +552,13 @@ class Wallet {
   Future<WalletInfo?> _loadWalletInfo() async {
     try {
       // Load wallet info from local database
-      final isar = DBISAR.sharedInstance.isar;
-      final walletInfos = await isar.walletInfos.where().findAll();
+      List<WalletInfo> walletInfos;
+      if (kIsWeb) {
+        walletInfos = await DBISAR.sharedInstance.findAllWalletInfos();
+      } else {
+        final isar = DBISAR.sharedInstance.isar;
+        walletInfos = await isar.walletInfos.where().findAll();
+      }
       
       if (walletInfos.isNotEmpty) {
         final walletInfo = walletInfos.first;
@@ -591,8 +603,13 @@ class Wallet {
   /// Load invoices from database
   Future<List<WalletInvoice>> _loadInvoicesFromDB() async {
     try {
-      final isar = DBISAR.sharedInstance.isar;
-      final invoices = await isar.walletInvoices.where().findAll();
+      List<WalletInvoice> invoices;
+      if (kIsWeb) {
+        invoices = await DBISAR.sharedInstance.findAllWalletInvoices();
+      } else {
+        final isar = DBISAR.sharedInstance.isar;
+        invoices = await isar.walletInvoices.where().findAll();
+      }
       LogUtils.d(() => 'Loaded ${invoices.length} invoices from database');
       return invoices;
     } catch (e) {
@@ -609,8 +626,13 @@ class Wallet {
   /// Update invoice status
   Future<void> updateInvoiceStatus(String invoiceId, InvoiceStatus status) async {
     try {
-      final isar = DBISAR.sharedInstance.isar;
-      final invoice = await isar.walletInvoices.where().invoiceIdEqualTo(invoiceId).findFirst();
+      WalletInvoice? invoice;
+      if (kIsWeb) {
+        invoice = await DBISAR.sharedInstance.findWalletInvoiceByInvoiceId(invoiceId);
+      } else {
+        final isar = DBISAR.sharedInstance.isar;
+        invoice = await isar.walletInvoices.where().invoiceIdEqualTo(invoiceId).findFirst();
+      }
       if (invoice != null) {
         invoice.status = status;
         await DBISAR.sharedInstance.saveToDB(invoice);
@@ -639,8 +661,13 @@ class Wallet {
       await refreshBalance();
       
       // Get all pending invoices from database
-      final isar = DBISAR.sharedInstance.isar;
-      final allInvoices = await isar.walletInvoices.where().findAll();
+      List<WalletInvoice> allInvoices;
+      if (kIsWeb) {
+        allInvoices = await DBISAR.sharedInstance.findAllWalletInvoices();
+      } else {
+        final isar = DBISAR.sharedInstance.isar;
+        allInvoices = await isar.walletInvoices.where().findAll();
+      }
       final pendingInvoices = allInvoices.where((invoice) => invoice.status == InvoiceStatus.pending).toList();
       
       if (pendingInvoices.isEmpty) {
@@ -700,8 +727,13 @@ class Wallet {
   /// Get pending invoices
   Future<List<WalletInvoice>> getPendingInvoices() async {
     try {
-      final isar = DBISAR.sharedInstance.isar;
-      final allInvoices = await isar.walletInvoices.where().findAll();
+      List<WalletInvoice> allInvoices;
+      if (kIsWeb) {
+        allInvoices = await DBISAR.sharedInstance.findAllWalletInvoices();
+      } else {
+        final isar = DBISAR.sharedInstance.isar;
+        allInvoices = await isar.walletInvoices.where().findAll();
+      }
       final pendingInvoices = allInvoices.where((invoice) => invoice.status == InvoiceStatus.pending).toList();
       // Sort by creation time (newest first)
       pendingInvoices.sort((a, b) => b.createdAt.compareTo(a.createdAt));
@@ -1039,8 +1071,13 @@ class Wallet {
   /// Get transactions by status
   Future<List<WalletTransaction>> getTransactionsByStatus(TransactionStatus status) async {
     try {
-      final isar = DBISAR.sharedInstance.isar;
-      final allTransactions = await isar.walletTransactions.where().findAll();
+      List<WalletTransaction> allTransactions;
+      if (kIsWeb) {
+        allTransactions = await DBISAR.sharedInstance.findAllWalletTransactions();
+      } else {
+        final isar = DBISAR.sharedInstance.isar;
+        allTransactions = await isar.walletTransactions.where().findAll();
+      }
       final filteredTransactions = allTransactions.where((transaction) {
         return transaction.status == status;
       }).toList();
@@ -1061,8 +1098,13 @@ class Wallet {
     int maxAmount,
   ) async {
     try {
-      final isar = DBISAR.sharedInstance.isar;
-      final allTransactions = await isar.walletTransactions.where().findAll();
+      List<WalletTransaction> allTransactions;
+      if (kIsWeb) {
+        allTransactions = await DBISAR.sharedInstance.findAllWalletTransactions();
+      } else {
+        final isar = DBISAR.sharedInstance.isar;
+        allTransactions = await isar.walletTransactions.where().findAll();
+      }
       final filteredTransactions = allTransactions.where((transaction) {
         return transaction.amount >= minAmount && transaction.amount <= maxAmount;
       }).toList();

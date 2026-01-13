@@ -94,7 +94,14 @@ class Groups {
   }
 
   Future<void> _loadAllGroupsFromDB() async {
-    List<GroupDBISAR> maps = await DBISAR.sharedInstance.isar.groupDBISARs.where().findAll();
+    List<GroupDBISAR> maps;
+    if (kIsWeb) {
+      // Web platform uses dedicated methods
+      maps = await DBISAR.sharedInstance.findAllGroups();
+    } else {
+      // Mobile platform uses Isar
+      maps = await DBISAR.sharedInstance.isar.groupDBISARs.where().findAll();
+    }
     for (GroupDBISAR e in maps) {
       GroupDBISAR groupDB = e.withGrowableLevels();
       if (groupDB.name.isEmpty) groupDB.name = _shortGroupId(groupDB.privateGroupId);
