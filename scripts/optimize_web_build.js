@@ -110,7 +110,10 @@ function updateReferences(content, filePath) {
   let updated = content;
   
   // Update all resource references
-  resourceMap.forEach((hashedPath, originalPath) => {
+  // Sort by path length (longest first) to handle nested paths correctly
+  const sortedEntries = Array.from(resourceMap.entries()).sort((a, b) => b[0].length - a[0].length);
+  
+  sortedEntries.forEach(([originalPath, hashedPath]) => {
     const originalBase = path.basename(originalPath);
     const hashedBase = path.basename(hashedPath);
     const originalDir = path.dirname(originalPath);
@@ -171,7 +174,66 @@ function updateReferences(content, filePath) {
       }
     );
     
-    // 6. Simple string replacement for exact matches (fallback)
+    // 6. Dynamic import() statements: import('path/to/file.js')
+    updated = updated.replace(
+      new RegExp(`import\\(['"]?([^'"]*?)${filenamePattern}['"]?\\)`, 'gi'),
+      (match, prefix) => {
+        if (prefix.endsWith(originalDir)) {
+          return `import('${prefix.replace(originalDir, hashedDir)}${hashedBase}')`;
+        }
+        return `import('${prefix}${hashedBase}')`;
+      }
+    );
+    
+    // 7. Service Worker file references (in JSON format)
+    // Pattern: "canvaskit/chromium/canvaskit-86e461cf.js": "hash"
+    // Match both with and without quotes around the path
+    // Note: Service Worker uses MD5 hash of file content (32 chars)
+    try {
+      const hashedFilePath = path.join(BUILD_DIR, hashedPath);
+      let fileHash = '';
+      if (fs.existsSync(hashedFilePath)) {
+        const content = fs.readFileSync(hashedFilePath);
+        fileHash = crypto.createHash('md5').update(content).digest('hex');
+      } else {
+        // Fallback: use hash from filename if file doesn't exist
+        const hashMatch = hashedBase.match(/-([a-f0-9]{8})/i);
+        fileHash = hashMatch ? hashMatch[1].repeat(4) : '00000000000000000000000000000000';
+      }
+      
+      updated = updated.replace(
+        new RegExp(`(["'])([^"']*?)${escapeRegex(originalBase)}\\1\\s*:\\s*["'][^"']*["']`, 'g'),
+        (match, quote, prefix) => {
+          if (prefix.endsWith(originalDir) || prefix === originalDir) {
+            const newPrefix = prefix.endsWith(originalDir) 
+              ? prefix.replace(originalDir, hashedDir)
+              : hashedDir;
+            return `${quote}${newPrefix}${hashedBase}${quote}: "${fileHash}"`;
+          }
+          return `${quote}${prefix}${hashedBase}${quote}: "${fileHash}"`;
+        }
+      );
+      
+      // 7b. Service Worker file references without quotes around path
+      // Pattern: canvaskit/chromium/canvaskit-86e461cf.js: "hash"
+      updated = updated.replace(
+        new RegExp(`([^"']*?)${escapeRegex(originalBase)}\\s*:\\s*["'][^"']*["']`, 'g'),
+        (match, prefix) => {
+          if (prefix.endsWith(originalDir) || prefix === originalDir) {
+            const newPrefix = prefix.endsWith(originalDir) 
+              ? prefix.replace(originalDir, hashedDir)
+              : hashedDir;
+            return `${newPrefix}${hashedBase}: "${fileHash}"`;
+          }
+          return `${prefix}${hashedBase}: "${fileHash}"`;
+        }
+      );
+    } catch (e) {
+      // If hash calculation fails, skip this update
+      console.warn(`Warning: Failed to calculate hash for ${hashedPath}: ${e.message}`);
+    }
+    
+    // 8. Simple string replacement for exact matches (fallback)
     updated = updated.replace(new RegExp(escapeRegex(originalPath), 'g'), hashedPath);
   });
   
@@ -341,6 +403,104 @@ function updateIndexHtml(chunkLoaderPath) {
   
   fs.writeFileSync(indexPath, content, 'utf8');
   console.log(`Updated ${INDEX_HTML} to use chunk loader`);
+}
+
+/**
+ * Create copies of canvaskit files with original filenames (without hash)
+ * This ensures Flutter can find canvaskit files by their original names
+ */
+function createCanvaskitOriginals() {
+  const canvaskitDir = path.join(BUILD_DIR, 'canvaskit');
+  if (!fs.existsSync(canvaskitDir)) {
+    return;
+  }
+  
+  console.log('Creating canvaskit file copies for original filenames...');
+  
+  // Process both root canvaskit directory and chromium subdirectory
+  const canvaskitDirs = [
+    canvaskitDir,
+    path.join(canvaskitDir, 'chromium')
+  ];
+  
+  canvaskitDirs.forEach(canvaskitSubDir => {
+    if (!fs.existsSync(canvaskitSubDir)) {
+      return;
+    }
+    
+    // Find all canvaskit files
+    const canvaskitFiles = fs.readdirSync(canvaskitSubDir)
+      .filter(f => {
+        const fullPath = path.join(canvaskitSubDir, f);
+        try {
+          const stat = fs.statSync(fullPath);
+          return stat.isFile() && /\.(js|wasm|symbols)$/i.test(f);
+        } catch (e) {
+          return false;
+        }
+      })
+      .map(f => path.join(canvaskitSubDir, f));
+    
+    if (canvaskitFiles.length === 0) {
+      return;
+    }
+    
+    // Group files by base name (without hash)
+    const filesByBaseName = new Map();
+    
+    canvaskitFiles.forEach(filePath => {
+      const fileName = path.basename(filePath);
+      const extMatch = fileName.match(/\.([^.]+)$/);
+      if (!extMatch) {
+        return;
+      }
+      const extension = extMatch[0];
+      const nameWithoutExt = fileName.substring(0, fileName.length - extension.length);
+      const nameWithoutHash = nameWithoutExt.replace(/(-[a-f0-9]{8})+$/i, '');
+      const baseName = nameWithoutHash + extension;
+      
+      if (!filesByBaseName.has(baseName)) {
+        filesByBaseName.set(baseName, []);
+      }
+      filesByBaseName.get(baseName).push({ path: filePath, fileName });
+    });
+    
+    // Create original filename copies
+    filesByBaseName.forEach((files, baseName) => {
+      // Find the file with the most hashes (likely the most recent/complete one)
+      const sortedFiles = files.sort((a, b) => {
+        const aHashCount = (a.fileName.match(/-[a-f0-9]{8}/gi) || []).length;
+        const bHashCount = (b.fileName.match(/-[a-f0-9]{8}/gi) || []).length;
+        return bHashCount - aHashCount;
+      });
+      const sourceFile = sortedFiles[0];
+      
+      // Create original filename copy (no hash)
+      if (baseName !== sourceFile.fileName) {
+        const originalPath = path.join(canvaskitSubDir, baseName);
+        if (fs.existsSync(originalPath)) {
+          try {
+            const stat = fs.statSync(originalPath);
+            if (!stat.isFile() || stat.isSymbolicLink()) {
+              fs.unlinkSync(originalPath);
+            } else {
+              return; // Already exists
+            }
+          } catch (e) {
+            // Ignore errors
+          }
+        }
+        
+        try {
+          fs.copyFileSync(sourceFile.path, originalPath);
+          const relativePath = getRelativePath(originalPath);
+          console.log(`Copied canvaskit file: ${relativePath} <- ${path.basename(sourceFile.path)}`);
+        } catch (copyError) {
+          console.warn(`Failed to copy canvaskit file ${baseName}: ${copyError.message}`);
+        }
+      }
+    });
+  });
 }
 
 /**
@@ -736,16 +896,20 @@ function optimize() {
     }
   }
   
-  // Step 6: Create symlinks for original font filenames
-  console.log('\nStep 6: Creating font symlinks...\n');
+  // Step 6: Create copies for original canvaskit filenames
+  console.log('\nStep 6: Creating canvaskit original file copies...\n');
+  createCanvaskitOriginals();
+  
+  // Step 7: Create symlinks for original font filenames
+  console.log('\nStep 7: Creating font symlinks...\n');
   createFontSymlinks();
   
-  // Step 7: Update AssetManifest files to map original paths to hashed paths
-  console.log('\nStep 7: Updating AssetManifest files...\n');
+  // Step 8: Update AssetManifest files to map original paths to hashed paths
+  console.log('\nStep 8: Updating AssetManifest files...\n');
   updateAssetManifests();
   
-  // Step 8: Update all file references
-  console.log('\nStep 8: Updating file references...\n');
+  // Step 9: Update all file references (including Service Worker files)
+  console.log('\nStep 9: Updating file references...\n');
   const filesToUpdate = findAllFiles(BUILD_DIR);
   filesToUpdate.forEach(filePath => {
     // Update references in text files
@@ -758,6 +922,17 @@ function optimize() {
   // Also update index.html references
   const indexPath = path.join(BUILD_DIR, INDEX_HTML);
   updateFileReferences(indexPath);
+  
+  // Step 10: Update Service Worker files specifically
+  console.log('\nStep 10: Updating Service Worker files...\n');
+  const serviceWorkerFiles = fs.readdirSync(BUILD_DIR)
+    .filter(f => f.startsWith('flutter_service_worker-') && f.endsWith('.js'))
+    .map(f => path.join(BUILD_DIR, f));
+  
+  serviceWorkerFiles.forEach(swPath => {
+    updateFileReferences(swPath);
+    console.log(`Updated Service Worker: ${path.basename(swPath)}`);
+  });
   
   console.log('\n=== Optimization Complete ===');
   console.log(`Total files hashed: ${resourceMap.size}`);
