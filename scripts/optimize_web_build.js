@@ -20,6 +20,11 @@ const INDEX_HTML = 'index.html';
 // Resource map: original path -> hashed path
 const resourceMap = new Map();
 
+// Dependency version cache: file path -> version signature
+// Used to skip processing unchanged dependency files
+const DEPENDENCY_VERSION_CACHE_FILE = path.join(__dirname, '..', '.dependency_versions.json');
+let dependencyVersionCache = {};
+
 /**
  * Calculate MD5 hash of a file
  */
@@ -49,7 +54,9 @@ function getBaseName(filePath) {
 function generateHashedName(filePath) {
   const hash = calculateHash(filePath);
   const ext = getExtension(filePath);
-  const baseName = getBaseName(filePath);
+  // Use base name without existing hashes to prevent double hashing
+  const baseNameWithoutHash = getBaseNameWithoutHash(filePath);
+  const baseName = baseNameWithoutHash.replace(ext, ''); // Remove extension
   const dir = path.dirname(filePath);
   const newName = `${baseName}-${hash}${ext}`;
   return path.join(dir, newName);
@@ -86,18 +93,73 @@ function getRelativePath(filePath) {
 }
 
 /**
+ * Extract base filename without hash suffixes
+ * e.g., "AssetManifest.bin-c14fcfb0-c14fcfb0.json" -> "AssetManifest.bin"
+ */
+function getBaseNameWithoutHash(filePath) {
+  const baseName = path.basename(filePath);
+  // Remove all hash suffixes: -hash1-hash2-hash3.ext -> .ext
+  // Pattern matches: - followed by 8 hex digits, repeated any number of times
+  const withoutHash = baseName.replace(/-[a-f0-9]{8}(?=-|\.)/gi, '');
+  return withoutHash;
+}
+
+/**
+ * Check if filename already has a hash suffix
+ */
+function hasHashSuffix(filePath) {
+  const baseName = path.basename(filePath);
+  const baseNameWithoutHash = getBaseNameWithoutHash(filePath);
+  // If base name changed after removing hashes, it means file has hash suffixes
+  return baseName !== baseNameWithoutHash;
+}
+
+/**
  * Rename file with hash
  */
 function hashFile(filePath) {
+  // Skip if file already has a hash suffix (avoid double hashing)
+  if (hasHashSuffix(filePath)) {
+    const relativePath = getRelativePath(filePath);
+    // If already hashed, use it as both original and hashed path
+    if (!resourceMap.has(relativePath)) {
+      resourceMap.set(relativePath, relativePath);
+    }
+    return filePath;
+  }
+  
   const hashedPath = generateHashedName(filePath);
   const relativePath = getRelativePath(filePath);
   const relativeHashedPath = getRelativePath(hashedPath);
   
+  // Check if the hashed filename would be too long (max 255 chars on most filesystems)
+  const hashedBaseName = path.basename(hashedPath);
+  if (hashedBaseName.length > 200) {
+    console.warn(`⚠️  Warning: Filename too long, skipping hashing: ${relativePath} (${hashedBaseName.length} chars)`);
+    // Use original path without hashing
+    if (!resourceMap.has(relativePath)) {
+      resourceMap.set(relativePath, relativePath);
+    }
+    return filePath;
+  }
+  
   // Only rename if different
   if (filePath !== hashedPath) {
+    try {
     fs.renameSync(filePath, hashedPath);
     resourceMap.set(relativePath, relativeHashedPath);
     console.log(`Hashed: ${relativePath} -> ${relativeHashedPath}`);
+    } catch (error) {
+      if (error.code === 'ENAMETOOLONG') {
+        console.warn(`⚠️  Warning: Filename too long, skipping hashing: ${relativePath}`);
+        // Use original path without hashing
+        if (!resourceMap.has(relativePath)) {
+          resourceMap.set(relativePath, relativePath);
+        }
+        return filePath;
+      }
+      throw error;
+    }
   }
   
   return hashedPath;
@@ -109,11 +171,66 @@ function hashFile(filePath) {
 function updateReferences(content, filePath) {
   let updated = content;
   
-  // Update all resource references
-  // Sort by path length (longest first) to handle nested paths correctly
-  const sortedEntries = Array.from(resourceMap.entries()).sort((a, b) => b[0].length - a[0].length);
+  // Performance optimization: Only process if content actually contains references
+  // Build a quick check set of basenames to avoid unnecessary processing
+  const contentLower = content.toLowerCase();
+  const relevantMappings = [];
   
-  sortedEntries.forEach(([originalPath, hashedPath]) => {
+  // For very large files, use a more efficient approach: batch processing
+  const isLargeFile = content.length > 2 * 1024 * 1024; // 2MB threshold
+  const maxMappingsToCheck = isLargeFile ? 2000 : 5000; // Check more mappings for large files
+  
+  resourceMap.forEach((hashedPath, originalPath) => {
+    const originalBase = path.basename(originalPath);
+    // Quick check: only process if filename appears in content
+    // For large files, use indexOf which is faster than includes for single checks
+    if (isLargeFile) {
+      if (contentLower.indexOf(originalBase.toLowerCase()) === -1 && 
+          contentLower.indexOf(originalPath.toLowerCase()) === -1) {
+        return; // Skip this mapping - not referenced in this file
+      }
+    } else {
+      if (!contentLower.includes(originalBase.toLowerCase()) && 
+          !contentLower.includes(originalPath.toLowerCase())) {
+        return; // Skip this mapping - not referenced in this file
+      }
+    }
+    relevantMappings.push({ hashedPath, originalPath });
+    
+    // Limit mappings for very large resource maps to avoid memory issues
+    if (relevantMappings.length >= maxMappingsToCheck) {
+      return; // Stop collecting more mappings
+    }
+  });
+  
+  // Sort by path length (longest first) to handle nested paths correctly
+  relevantMappings.sort((a, b) => b.originalPath.length - a.originalPath.length);
+  
+  // For large files, process in batches to avoid blocking
+  if (isLargeFile && relevantMappings.length > 100) {
+    // Process in smaller batches for large files
+    const batchSize = 50;
+    for (let i = 0; i < relevantMappings.length; i += batchSize) {
+      const batch = relevantMappings.slice(i, i + batchSize);
+      batch.forEach(({ hashedPath, originalPath }) => {
+        updated = processMapping(updated, hashedPath, originalPath);
+      });
+    }
+  } else {
+    // Process all mappings for normal files
+    relevantMappings.forEach(({ hashedPath, originalPath }) => {
+      updated = processMapping(updated, hashedPath, originalPath);
+    });
+  }
+  
+  return updated;
+}
+
+/**
+ * Process a single mapping (extracted for batch processing)
+ */
+function processMapping(content, hashedPath, originalPath) {
+  let updated = content;
     const originalBase = path.basename(originalPath);
     const hashedBase = path.basename(hashedPath);
     const originalDir = path.dirname(originalPath);
@@ -174,9 +291,9 @@ function updateReferences(content, filePath) {
       }
     );
     
-    // 6. Dynamic import() statements: import('path/to/file.js')
+    // 6. Dynamic import() statements: import("path/to/file.js")
     updated = updated.replace(
-      new RegExp(`import\\(['"]?([^'"]*?)${filenamePattern}['"]?\\)`, 'gi'),
+      new RegExp(`import\\(['"]([^'"]*?)${filenamePattern}['"]\\)`, 'g'),
       (match, prefix) => {
         if (prefix.endsWith(originalDir)) {
           return `import('${prefix.replace(originalDir, hashedDir)}${hashedBase}')`;
@@ -193,8 +310,8 @@ function updateReferences(content, filePath) {
       const hashedFilePath = path.join(BUILD_DIR, hashedPath);
       let fileHash = '';
       if (fs.existsSync(hashedFilePath)) {
-        const content = fs.readFileSync(hashedFilePath);
-        fileHash = crypto.createHash('md5').update(content).digest('hex');
+        const fileContent = fs.readFileSync(hashedFilePath);
+        fileHash = crypto.createHash('md5').update(fileContent).digest('hex');
       } else {
         // Fallback: use hash from filename if file doesn't exist
         const hashMatch = hashedBase.match(/-([a-f0-9]{8})/i);
@@ -233,9 +350,41 @@ function updateReferences(content, filePath) {
       console.warn(`Warning: Failed to calculate hash for ${hashedPath}: ${e.message}`);
     }
     
-    // 8. Simple string replacement for exact matches (fallback)
+    // 8. CanvasKit path fixes: canvaskit/chromium/xxx -> canvaskit/xxx
+    // Fix paths that reference chromium subdirectory but files are in canvaskit root
+    if (originalPath.includes('canvaskit/') && !originalPath.includes('chromium/')) {
+      // If the hashed path doesn't have chromium/, but code references it with chromium/
+      updated = updated.replace(
+        new RegExp(`canvaskit/chromium/${escapeRegex(hashedBase)}`, 'g'),
+        hashedPath.replace(/^canvaskit\//, 'canvaskit/')
+      );
+    }
+    
+    // 9. Fix Service Worker manifest references: avoid replacing variable method calls
+    // Pattern: await manifest.json() where manifest is a variable, not a filename
+    // We should NOT replace variable.method() calls, only string literals
+    const jsonFilePattern = escapeRegex(originalBase);
+    if (jsonFilePattern.endsWith('.json')) {
+      // Avoid replacing JSON filenames that are part of variable method calls
+      // Pattern: variable.json() should not be replaced
+      // Only replace if it's a string literal (in quotes)
+      updated = updated.replace(
+        new RegExp(`([^a-zA-Z0-9_])${jsonFilePattern}([^()])`, 'g'),
+        (match, before, after) => {
+          // Don't replace if followed by () (function/method call)
+          if (after === '(') {
+            return match; // Keep original - this is a method call, not a filename
+          }
+          return before + hashedBase + after;
+        }
+      );
+    }
+    
+  // 10. Simple string replacement for exact matches (fallback)
+  // But skip if it's a JSON file that might be in a method call
+  if (!originalBase.endsWith('.json')) {
     updated = updated.replace(new RegExp(escapeRegex(originalPath), 'g'), hashedPath);
-  });
+  }
   
   return updated;
 }
@@ -251,12 +400,16 @@ function escapeRegex(str) {
  * Update file references
  */
 function updateFileReferences(filePath) {
+  try {
   const content = fs.readFileSync(filePath, 'utf8');
   const updated = updateReferences(content, filePath);
   
   if (content !== updated) {
     fs.writeFileSync(filePath, updated, 'utf8');
-    console.log(`Updated references in: ${getRelativePath(filePath)}`);
+    }
+  } catch (error) {
+    console.warn(`⚠️  Failed to process file: ${getRelativePath(filePath)} - ${error.message}`);
+    // Continue processing other files even if one fails
   }
 }
 
@@ -908,37 +1061,408 @@ function optimize() {
   console.log('\nStep 8: Updating AssetManifest files...\n');
   updateAssetManifests();
   
-  // Step 9: Update all file references (including Service Worker files)
+  // Step 9: Update all file references (only critical files for performance)
   console.log('\nStep 9: Updating file references...\n');
   const filesToUpdate = findAllFiles(BUILD_DIR);
-  filesToUpdate.forEach(filePath => {
-    // Update references in text files
+  
+  /**
+   * Load dependency version cache from disk
+   */
+  function loadDependencyVersionCache() {
+    try {
+      if (fs.existsSync(DEPENDENCY_VERSION_CACHE_FILE)) {
+        const cacheContent = fs.readFileSync(DEPENDENCY_VERSION_CACHE_FILE, 'utf8');
+        dependencyVersionCache = JSON.parse(cacheContent);
+        console.log(`Loaded dependency version cache (${Object.keys(dependencyVersionCache).length} entries)`);
+      }
+    } catch (error) {
+      console.warn(`Warning: Failed to load dependency version cache: ${error.message}`);
+      dependencyVersionCache = {};
+    }
+  }
+  
+  /**
+   * Save dependency version cache to disk
+   */
+  function saveDependencyVersionCache() {
+    try {
+      fs.writeFileSync(DEPENDENCY_VERSION_CACHE_FILE, JSON.stringify(dependencyVersionCache, null, 2), 'utf8');
+    } catch (error) {
+      console.warn(`Warning: Failed to save dependency version cache: ${error.message}`);
+    }
+  }
+  
+  /**
+   * Extract version signature from dependency file
+   * For Flutter files: extract first hash (e.g., "flutter-76f08d47-..." -> "76f08d47")
+   * For CanvasKit files: extract first hash from filename
+   */
+  function extractDependencyVersion(filePath) {
+    const baseName = path.basename(filePath);
+    const relativePath = getRelativePath(filePath);
+    
+    // Extract version from filename hash pattern
+    // Pattern: name-version-hash-hash.ext or name-version.ext
+    const hashPattern = /-([a-f0-9]{8})(?:-|\.)/i;
+    const match = baseName.match(hashPattern);
+    
+    if (match) {
+      return match[1]; // Return first 8-char hash as version identifier
+    }
+    
+    // Fallback: use file content hash as version
+    try {
+      const stats = fs.statSync(filePath);
+      // Use file size + modification time as version for very large files
+      if (stats.size > 5 * 1024 * 1024) {
+        return `${stats.size}-${stats.mtimeMs}`;
+      }
+      // For smaller files, use content hash
+      return calculateHash(filePath);
+    } catch (error) {
+      return null;
+    }
+  }
+  
+  /**
+   * Check if a file is a dependency file (third-party library/framework)
+   * These files typically don't need reference updates and can be cached
+   */
+  function isDependencyFile(filePath) {
+    const relativePath = getRelativePath(filePath);
+    const baseName = path.basename(filePath);
+    const dirName = path.dirname(relativePath);
+    
+    // CanvasKit files (Flutter engine - rarely changes)
+    if (dirName.startsWith('canvaskit/') || relativePath.startsWith('canvaskit/')) {
+      return true;
+    }
+    
+    // Flutter framework files (flutter-*.js - framework code, not app code)
+    if (baseName.startsWith('flutter-') && baseName.endsWith('.js') && 
+        !baseName.includes('bootstrap') && !baseName.includes('service_worker')) {
+      return true;
+    }
+    
+    // Other third-party library patterns can be added here
+    // For example: vendor/, lib/, node_modules/, etc.
+    
+    return false;
+  }
+  
+  /**
+   * Check if dependency file has changed version
+   * Returns true if version changed or file is new, false if unchanged
+   */
+  function hasDependencyVersionChanged(filePath) {
+    const relativePath = getRelativePath(filePath);
+    const currentVersion = extractDependencyVersion(filePath);
+    
+    if (!currentVersion) {
+      return true; // If we can't determine version, process it
+    }
+    
+    const cachedVersion = dependencyVersionCache[relativePath];
+    
+    if (!cachedVersion) {
+      // New file, needs processing
+      dependencyVersionCache[relativePath] = currentVersion;
+      return true;
+    }
+    
+    if (cachedVersion !== currentVersion) {
+      // Version changed, needs processing
+      dependencyVersionCache[relativePath] = currentVersion;
+      return true;
+    }
+    
+    // Version unchanged, can skip
+    return false;
+  }
+  
+  // Load dependency version cache at start
+  loadDependencyVersionCache();
+  
+  // Filter to only critical files that need reference updates
+  // Skip dependency files (they don't contain references to app files)
+  // Skip most JS files as they're already processed or don't need updates
+  const criticalFiles = filesToUpdate.filter(filePath => {
+    // Check dependency files - only process if version changed
+    if (isDependencyFile(filePath)) {
+      // Only process if version changed, otherwise skip (can use cached version)
+      return hasDependencyVersionChanged(filePath);
+    }
+    
     const ext = getExtension(filePath).toLowerCase();
-    if (['.html', '.js', '.json', '.css', '.dart'].includes(ext)) {
-      updateFileReferences(filePath);
+    const baseName = path.basename(filePath);
+    const relativePath = getRelativePath(filePath);
+    
+    // Always update: HTML, CSS, JSON files (app configuration files)
+    if (['.html', '.css', '.json'].includes(ext)) {
+      return true;
+    }
+    
+    // Only update specific JS files: bootstrap, chunk loader, service workers, app chunks
+    if (ext === '.js') {
+      return baseName.startsWith('flutter_bootstrap') ||
+             baseName.startsWith('chunk-loader') ||
+             baseName.startsWith('flutter_service_worker') ||
+             baseName.startsWith('main.dart-chunk');
+    }
+    
+    return false;
+  });
+  
+  // Count dependency files for reporting (check versions without modifying cache)
+  const dependencyFiles = filesToUpdate.filter(isDependencyFile);
+  let changedCount = 0;
+  let unchangedCount = 0;
+  
+  dependencyFiles.forEach(filePath => {
+    const relativePath = getRelativePath(filePath);
+    const currentVersion = extractDependencyVersion(filePath);
+    const cachedVersion = dependencyVersionCache[relativePath];
+    
+    if (!cachedVersion || cachedVersion !== currentVersion) {
+      changedCount++;
+      // Update cache
+      if (currentVersion) {
+        dependencyVersionCache[relativePath] = currentVersion;
+      }
+    } else {
+      unchangedCount++;
     }
   });
   
-  // Also update index.html references
+  if (dependencyFiles.length > 0) {
+    console.log(`Dependency files: ${changedCount} changed (will process), ${unchangedCount} unchanged (skipped - using cache)`);
+  }
+  
+  console.log(`Found ${criticalFiles.length} critical files to update (out of ${filesToUpdate.length} total files)`);
+  let processed = 0;
+  let skipped = 0;
+  const startTime = Date.now();
+  
+  criticalFiles.forEach((filePath, index) => {
+    const baseName = path.basename(filePath);
+    const relativePath = getRelativePath(filePath);
+    
+    // Show current file being processed every 5 files or for important files
+    if (processed % 5 === 0 || baseName.startsWith('flutter_bootstrap') || 
+        baseName.startsWith('flutter_service_worker') || baseName === 'index.html') {
+      process.stdout.write(`\r  Progress: ${processed}/${criticalFiles.length} (${Math.round(processed/criticalFiles.length*100)}%) - Processing: ${baseName.substring(0, 40)}...`);
+    }
+    
+    try {
+      updateFileReferences(filePath);
+      processed++;
+    } catch (error) {
+      skipped++;
+      console.warn(`\n⚠️  Skipped file: ${relativePath} - ${error.message}`);
+    }
+    
+    // Show progress every 10 files
+    if (processed % 10 === 0) {
+      const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+      const rate = (processed / elapsed).toFixed(1);
+      process.stdout.write(`\r  Progress: ${processed}/${criticalFiles.length} (${Math.round(processed/criticalFiles.length*100)}%) - ${rate} files/sec`);
+    }
+  });
+  
+  if (processed > 0 || skipped > 0) {
+    const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+    console.log(`\n  Completed: ${processed} files updated, ${skipped} skipped (${elapsed}s)`);
+  }
+  
+  // Step 9.1: Update index.html references (including explicit bootstrap and manifest updates)
+  console.log('\nStep 9.1: Updating index.html references...\n');
   const indexPath = path.join(BUILD_DIR, INDEX_HTML);
   updateFileReferences(indexPath);
   
-  // Step 10: Update Service Worker files specifically
+  // Explicitly update flutter_bootstrap.js and manifest.json references in index.html
+  // These are critical entry points that must be updated correctly
+  let indexContent = fs.readFileSync(indexPath, 'utf8');
+  const originalIndexContent = indexContent;
+  
+  // Find the actual hashed flutter_bootstrap file
+  const bootstrapFiles = fs.readdirSync(BUILD_DIR)
+    .filter(f => f.startsWith('flutter_bootstrap-') && f.endsWith('.js'))
+    .map(f => path.basename(f));
+  
+  if (bootstrapFiles.length > 0) {
+    indexContent = indexContent.replace(
+      /<script[^>]*src=["']flutter_bootstrap\.js["'][^>]*>/i,
+      `<script src="${bootstrapFiles[0]}" async></script>`
+    );
+  }
+  
+  // Find the actual hashed manifest file (use the shortest one, which is usually the base manifest)
+  const manifestFiles = fs.readdirSync(BUILD_DIR)
+    .filter(f => f.startsWith('manifest-') && f.endsWith('.json'))
+    .map(f => path.basename(f))
+    .sort((a, b) => a.length - b.length);
+  
+  if (manifestFiles.length > 0) {
+    indexContent = indexContent.replace(
+      /<link[^>]*rel=["']manifest["'][^>]*href=["']manifest\.json["'][^>]*>/i,
+      `<link rel="manifest" href="${manifestFiles[0]}">`
+    );
+  }
+  
+  if (indexContent !== originalIndexContent) {
+    fs.writeFileSync(indexPath, indexContent, 'utf8');
+    console.log(`Updated ${INDEX_HTML} with hashed file references`);
+  }
+  
+  // Step 9.2: Fix CanvasKit paths - create chromium subdirectory if needed
+  console.log('\nStep 9.2: Fixing CanvasKit paths...\n');
+  const canvaskitDir = path.join(BUILD_DIR, 'canvaskit');
+  const canvaskitChromiumDir = path.join(canvaskitDir, 'chromium');
+  
+  if (fs.existsSync(canvaskitDir) && !fs.existsSync(canvaskitChromiumDir)) {
+    fs.mkdirSync(canvaskitChromiumDir, { recursive: true });
+    console.log('Created canvaskit/chromium directory');
+  }
+  
+  // Copy or link CanvasKit files to chromium subdirectory if they're referenced there
+  if (fs.existsSync(canvaskitDir)) {
+    const canvaskitFiles = fs.readdirSync(canvaskitDir)
+      .filter(f => {
+        const fullPath = path.join(canvaskitDir, f);
+        try {
+          return fs.statSync(fullPath).isFile() && 
+                 (f.endsWith('.wasm') || f.endsWith('.js'));
+        } catch {
+          return false;
+        }
+      });
+    
+    canvaskitFiles.forEach(file => {
+      const sourcePath = path.join(canvaskitDir, file);
+      const targetPath = path.join(canvaskitChromiumDir, file);
+      
+      // Only create if doesn't exist
+      if (!fs.existsSync(targetPath)) {
+        try {
+          fs.copyFileSync(sourcePath, targetPath);
+          console.log(`Copied CanvasKit file to chromium/: ${file}`);
+        } catch (error) {
+          console.warn(`Failed to copy ${file} to chromium/: ${error.message}`);
+        }
+      }
+    });
+  }
+  
+  // Step 10: Update Service Worker files and optimize activation
   console.log('\nStep 10: Updating Service Worker files...\n');
   const serviceWorkerFiles = fs.readdirSync(BUILD_DIR)
     .filter(f => f.startsWith('flutter_service_worker-') && f.endsWith('.js'))
     .map(f => path.join(BUILD_DIR, f));
   
+  console.log(`Found ${serviceWorkerFiles.length} Service Worker files to update...`);
+  let swProcessed = 0;
   serviceWorkerFiles.forEach(swPath => {
-    updateFileReferences(swPath);
-    console.log(`Updated Service Worker: ${path.basename(swPath)}`);
+    let swContent = fs.readFileSync(swPath, 'utf8');
+    const originalContent = swContent;
+    
+    // IMPORTANT: In Service Worker, manifest.json() is a method call on a variable (Response object)
+    // Pattern: var manifest = await manifestCache.match('manifest');
+    //          var oldManifest = await manifest.json();  // manifest is a variable, not a filename
+    // We must restore this to the correct form: await manifest.json()
+    
+    // Fix incorrectly replaced variable method calls
+    // Pattern 1: Fix await manifest_xxx_json.json() back to await manifest.json()
+    // This happens when manifest.json() was incorrectly treated as a filename
+    swContent = swContent.replace(
+      /await\s+manifest_[a-f0-9_]+\.json\(\)/g,
+      'await manifest.json()'
+    );
+    
+    // Pattern 2: Fix await "manifest-xxx.json" (string) back to await manifest.json() (variable method call)
+    // This happens when it was replaced as a string literal
+    swContent = swContent.replace(
+      /(var\s+oldManifest\s*=\s*await\s+)["']([a-zA-Z0-9_-]+-[a-f0-9]+(?:-[a-f0-9]+)*\.json)["']/g,
+      (match, prefix) => {
+        // This should be await manifest.json() where manifest is a variable
+        return prefix + 'manifest.json()';
+      }
+    );
+    
+    // Pattern 3: Fix any await "manifest-xxx.json" that appears in context of manifest variable
+    swContent = swContent.replace(
+      /(var\s+manifest\s*=.*?manifestCache\.match\(['"]manifest['"]\)[^;]*;\s*[^}]*?await\s+)["']([a-zA-Z0-9_-]+-[a-f0-9]+(?:-[a-f0-9]+)*\.json)["']/gs,
+      (match, prefix) => {
+        // If this is after a manifest variable assignment, it should be manifest.json()
+        return prefix + 'manifest.json()';
+      }
+    );
+    
+    // Optimize: Skip immediate cache cleanup on first install to speed up activation
+    swContent = swContent.replace(
+      /if \(!manifest\) \{[^}]*await caches\.delete\(CACHE_NAME\);[^}]*contentCache = await caches\.open\(CACHE_NAME\);/gs,
+      `if (!manifest) {
+        // Skip cache deletion on first install for faster activation
+        contentCache = await caches.open(CACHE_NAME);`
+    );
+    
+    // Fix: Replace addAll with individual add calls to handle failures gracefully
+    // addAll fails if ANY resource fails, so we need to add them individually
+    swContent = swContent.replace(
+      /return contentCache\.addAll\(resources\);/g,
+      `// Add resources individually to handle failures gracefully
+  var addPromises = resources.map(function(resource) {
+    return contentCache.add(new Request(resource, {'cache': 'reload'})).catch(function(err) {
+      console.warn('Failed to cache resource: ' + resource + ', error: ' + err);
+      return null; // Continue even if one resource fails
+    });
   });
+  return Promise.all(addPromises);`
+    );
+    
+    // Also fix the install event addAll
+    swContent = swContent.replace(
+      /return cache\.addAll\(\s*CORE\.map\(\(value\) => new Request\(value, \{'cache': 'reload'\}\)\)\s*\);/g,
+      `// Add CORE resources individually to handle failures gracefully
+  var corePromises = CORE.map(function(value) {
+    return cache.add(new Request(value, {'cache': 'reload'})).catch(function(err) {
+      console.warn('Failed to cache CORE resource: ' + value + ', error: ' + err);
+      return null; // Continue even if one resource fails
+    });
+  });
+  return Promise.all(corePromises);`
+    );
+    
+    // Now update other references normally (but skip variable method calls)
+    swContent = updateReferences(swContent, swPath);
+    
+    // Final fix: Ensure manifest.json() is not replaced again
+    swContent = swContent.replace(
+      /await\s+manifest_[a-f0-9_]+\.json\(\)/g,
+      'await manifest.json()'
+    );
+    
+    if (swContent !== originalContent) {
+      fs.writeFileSync(swPath, swContent, 'utf8');
+      console.log(`Updated Service Worker: ${path.basename(swPath)}`);
+    }
+    swProcessed++;
+    if (swProcessed % 5 === 0 || swProcessed === serviceWorkerFiles.length) {
+      process.stdout.write(`\r  Progress: ${swProcessed}/${serviceWorkerFiles.length} Service Workers`);
+    }
+  });
+  if (serviceWorkerFiles.length > 0) {
+    console.log(`\n  Completed: ${serviceWorkerFiles.length} Service Workers processed`);
+  }
+  
+  // Save dependency version cache before exit
+  saveDependencyVersionCache();
   
   console.log('\n=== Optimization Complete ===');
   console.log(`Total files hashed: ${resourceMap.size}`);
   if (chunkInfo) {
     console.log(`Main file split into ${chunkInfo.chunkCount} chunks`);
   }
+  console.log(`Dependency version cache saved (${Object.keys(dependencyVersionCache).length} entries)`);
 }
 
 // Run optimization
