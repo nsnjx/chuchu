@@ -146,12 +146,18 @@ class ChuChuNavigator extends Navigator {
     ChuChuPushPageType type = ChuChuPushPageType.slideToLeft,
     BuildContext? nestedNavigatorContext,
   }) {
-    pageName ??= builder(null).runtimeType.toString();
+    // If pageName is explicitly null, use empty string for route name (prevents URL hash in web)
+    // Otherwise use default behavior: use provided pageName or default to runtimeType
+    final String routeName = pageName == null 
+        ? '' // Empty string prevents URL hash update in web, but still allows RouteSettings to work
+        : (pageName.isEmpty ? builder(null).runtimeType.toString() : pageName);
     context ??= navigatorKey.currentContext;
     if (context == null) return Future.value(null);
 
+    // Always use ChuChuRouteSettings to maintain compatibility with mobile features (pageId, isShortLived)
+    // Empty route name prevents URL hash update in web while preserving mobile functionality
     final routeSettings = ChuChuRouteSettings(
-      name: pageName,
+      name: routeName.isEmpty ? null : routeName, // null name prevents URL hash in web
       pageId: pageId,
       isShortLived: isShortLived,
     );
@@ -172,7 +178,7 @@ class ChuChuNavigator extends Navigator {
         transitionDuration: const Duration(milliseconds: 300),
         reverseTransitionDuration: const Duration(milliseconds: 250),
         fullscreenDialog: fullscreenDialog,
-        settings: routeSettings,
+        settings: routeSettings, // May be RouteSettings (no name) or ChuChuRouteSettings
       );
       // Use nested Navigator for web
       return Navigator.of(nestedNavigatorContext, rootNavigator: false).push(route);
@@ -183,23 +189,23 @@ class ChuChuNavigator extends Navigator {
       case ChuChuPushPageType.slideToLeft:
         route = SlideLeftToRightRoute<T>(
           fullscreenDialog: fullscreenDialog,
-          settings: routeSettings,
+          settings: routeSettings, // May be RouteSettings (no name) or ChuChuRouteSettings
           builder: builder,
         );
       case ChuChuPushPageType.noAnimation:
         route = NoAnimationPageRoute<T>(
           builder: builder,
-          settings: routeSettings,
+          settings: routeSettings, // May be RouteSettings (no name) or ChuChuRouteSettings
         );
       case ChuChuPushPageType.opacity:
         route = OpacityAnimationPageRoute<T>(
           builder: builder,
-          settings: routeSettings,
+          settings: routeSettings, // May be RouteSettings (no name) or ChuChuRouteSettings
         );
       case ChuChuPushPageType.transparent:
         route = TransparentPageRoute<T>(
           builder: builder,
-          settings: routeSettings,
+          settings: routeSettings, // May be RouteSettings (no name) or ChuChuRouteSettings
         );
     }
 

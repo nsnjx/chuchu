@@ -454,7 +454,12 @@ class _NewLoginPageState extends State<NewLoginPage> with ChuChuUIRefreshMixin {
   }
 
   void _handleCreateAccount() {
-    ChuChuNavigator.pushPage(context, (context) => RegisterForm());
+    // Use pageName: null to prevent URL hash from being added in web
+    ChuChuNavigator.pushPage(
+      context,
+      (context) => RegisterForm(),
+      pageName: null, // Prevent route name in URL for web
+    );
   }
 
   void _handleGuestMode() {
