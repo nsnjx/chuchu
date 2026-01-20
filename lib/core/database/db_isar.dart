@@ -91,7 +91,6 @@ class DBISAR {
     
     if (kIsWeb) {
       // Web platform uses IndexedDB
-      debugPrint('[DB-Web] 🔵 Opening IndexedDB database on web platform, pubkey: $pubkey');
       _indexedDB = IndexedDBStorage();
       await _indexedDB!.open(pubkey);
         debugPrint('[DB-Web] ✅ IndexedDB database opened successfully');
@@ -154,6 +153,7 @@ class DBISAR {
   }
   
   /// Find user by pubKey (web only)
+  /// Returns the latest record if multiple records exist with the same pubKey
   Future<UserDBISAR?> findUserByPubKey(String pubKey) async {
     if (!kIsWeb) {
       throw UnsupportedError('findUserByPubKey() is only available on web platform');
@@ -164,7 +164,21 @@ class DBISAR {
     final collection = _indexedDB!.getCollection<UserDBISAR>('userDBISARs');
     final query = collection.where();
     query.equalTo('pubKey', pubKey);
-    return await query.findFirst();
+    // Get all matching records and return the latest one (by id, since newer records have higher id)
+    final allUsers = await query.findAll();
+    if (allUsers.isEmpty) return null;
+    
+    // Sort by id descending (newer records have higher id) or by lastUpdatedTime if available
+    allUsers.sort((a, b) {
+      // First try to sort by lastUpdatedTime (if both have it)
+      if (a.lastUpdatedTime > 0 && b.lastUpdatedTime > 0) {
+        return b.lastUpdatedTime.compareTo(a.lastUpdatedTime);
+      }
+      // Otherwise sort by id (newer records have higher id)
+      return b.id.compareTo(a.id);
+    });
+    
+    return allUsers.first;
   }
   
   /// Get all relays (web only)
@@ -437,6 +451,140 @@ class DBISAR {
     return Map.from(_buffers);
   }
 
+  /// Generic deduplication helper for web IndexedDB (web only)
+  /// Deduplicates objects by unique field, keeps the latest one, and reuses IDs
+  Future<void> _deduplicateAndSave<T>(
+    List<dynamic> objects,
+    String collectionName,
+    String uniqueFieldName,
+    String Function(T) getUniqueValue,
+    int Function(T) getTimestamp,
+  ) async {
+    final typedObjects = objects.cast<T>();
+    final Map<String, T> uniqueObjects = {};
+    
+    // Deduplicate by unique field (keep only the latest one)
+    for (var obj in typedObjects) {
+      final uniqueValue = getUniqueValue(obj);
+      if (!uniqueObjects.containsKey(uniqueValue)) {
+        uniqueObjects[uniqueValue] = obj;
+      } else {
+        final existing = uniqueObjects[uniqueValue]!;
+        final dynamic objDynamic = obj;
+        final dynamic existingDynamic = existing;
+        if (getTimestamp(obj) > getTimestamp(existing) ||
+            (getTimestamp(obj) == getTimestamp(existing) && objDynamic.id > existingDynamic.id)) {
+          uniqueObjects[uniqueValue] = obj;
+        }
+      }
+    }
+    
+    // Delete existing records and reuse IDs
+    final collection = _indexedDB!.getCollection<T>(collectionName);
+    final objectsToSave = <T>[];
+    
+    for (var obj in uniqueObjects.values) {
+      final uniqueValue = getUniqueValue(obj);
+      final idsToDelete = await _getRawIdsForUniqueField(collectionName, uniqueFieldName, uniqueValue);
+      
+      if (idsToDelete.isNotEmpty) {
+        await collection.deleteAll(idsToDelete);
+        final dynamic objDynamic = obj;
+        objDynamic.id = idsToDelete.reduce((a, b) => a > b ? a : b);
+      }
+      
+      objectsToSave.add(obj);
+    }
+    
+    objects.clear();
+    objects.addAll(objectsToSave);
+  }
+
+  /// Get raw IDs from IndexedDB for records matching a unique field value (web only)
+  /// Directly queries the raw database to get real IDs, bypassing deserialization
+  Future<List<int>> _getRawIdsForUniqueField(String collectionName, String fieldName, String fieldValue) async {
+    if (!kIsWeb || _indexedDB == null) {
+      return [];
+    }
+    
+    try {
+      final db = _indexedDB!.rawDb;
+      if (db == null) {
+        return [];
+      }
+      
+      final transaction = db.transaction(collectionName, 'readonly');
+      final store = transaction.objectStore(collectionName);
+      final request = store.getAll(null);
+      final allRawObjects = await _requestToFuture<List>(request);
+      
+      final idsToDelete = <int>[];
+      for (var rawObj in allRawObjects) {
+        try {
+          Map<String, dynamic> map;
+          if (rawObj is Map<String, dynamic>) {
+            map = rawObj;
+          } else if (rawObj is Map) {
+            map = Map<String, dynamic>.from(rawObj);
+          } else {
+            continue;
+          }
+          
+          final rawFieldValue = map[fieldName] as String?;
+          final rawId = map['id'];
+          
+          int? idInt;
+          if (rawId is int) {
+            idInt = rawId;
+          } else if (rawId is String) {
+            idInt = int.tryParse(rawId);
+          } else if (rawId != null) {
+            idInt = int.tryParse(rawId.toString());
+          }
+          
+          if (rawFieldValue == fieldValue && idInt != null && idInt != 0) {
+            idsToDelete.add(idInt);
+          }
+        } catch (e) {
+          // Skip invalid records
+          continue;
+        }
+      }
+      
+      return idsToDelete;
+    } catch (e) {
+      debugPrint('[DB-Web] ❌ Error getting raw IDs for $fieldName=$fieldValue in $collectionName: $e');
+      return [];
+    }
+  }
+  
+  /// Helper to convert IndexedDB request to Future (same as in indexed_db_storage.dart)
+  Future<T> _requestToFuture<T>(dynamic request) async {
+    if (request is Future) {
+      return await request as Future<T>;
+    }
+    
+    final completer = Completer<T>();
+    try {
+      (request as dynamic).onSuccess.listen((dynamic e) {
+        final result = (e.target as dynamic).result;
+        if (!completer.isCompleted) {
+          completer.complete(result as T);
+        }
+      }, onError: (dynamic e) {
+        if (!completer.isCompleted) {
+          completer.completeError(e);
+        }
+      });
+    } catch (e) {
+      if (!completer.isCompleted) {
+        completer.completeError(e);
+      }
+    }
+    
+    return completer.future;
+  }
+
   Future<void> saveObjectsToDB<T>(List<T> objects) async {
     for (var object in objects) {
       await saveToDB(object);
@@ -494,7 +642,6 @@ class DBISAR {
   /// Save objects to IndexedDB (web only)
   Future<void> _saveToIndexedDB(List<dynamic> objects, Type type) async {
     if (_indexedDB == null) {
-      debugPrint('[DB-Web] ⚠️ _saveToIndexedDB: _indexedDB is null');
       return;
     }
     
@@ -502,55 +649,284 @@ class DBISAR {
     switch (type) {
       case UserDBISAR:
         collectionName = 'userDBISARs';
+        
+        // Deduplicate by pubKey (keep only the latest one for each pubKey)
+        final userObjects = objects.cast<UserDBISAR>();
+        final Map<String, UserDBISAR> uniqueUsers = {};
+        
+        for (var user in userObjects) {
+          final pubKey = user.pubKey;
+          if (!uniqueUsers.containsKey(pubKey)) {
+            uniqueUsers[pubKey] = user;
+          } else {
+            final existing = uniqueUsers[pubKey]!;
+            if (user.lastUpdatedTime > existing.lastUpdatedTime ||
+                (user.lastUpdatedTime == existing.lastUpdatedTime && user.id > existing.id)) {
+              uniqueUsers[pubKey] = user;
+            }
+          }
+        }
+        
+        // Delete existing records and reuse IDs to prevent duplicates
+        final collection = _indexedDB!.getCollection<UserDBISAR>(collectionName);
+        final usersToSave = <UserDBISAR>[];
+        
+        for (var user in uniqueUsers.values) {
+          final idsToDelete = await _getRawIdsForUniqueField('userDBISARs', 'pubKey', user.pubKey);
+          
+          if (idsToDelete.isNotEmpty) {
+            await collection.deleteAll(idsToDelete);
+            user.id = idsToDelete.reduce((a, b) => a > b ? a : b);
+          }
+          
+          usersToSave.add(user);
+        }
+        
+        objects.clear();
+        objects.addAll(usersToSave);
         break;
       case RelayDBISAR:
         collectionName = 'relayDBISARs';
+        await _deduplicateAndSave<RelayDBISAR>(
+          objects,
+          collectionName,
+          'url',
+          (r) => r.url,
+          (r) => r.id, // No timestamp field, use id
+        );
         break;
       case NoteDBISAR:
         collectionName = 'noteDBISARs';
-        debugPrint('[DB-Web] 🔵 Saving ${objects.length} NoteDBISAR objects to IndexedDB');
+        
+        // Deduplicate by noteId (keep only the latest one for each noteId)
+        final noteObjects = objects.cast<NoteDBISAR>();
+        final Map<String, NoteDBISAR> uniqueNotes = {};
+        
+        for (var note in noteObjects) {
+          final noteId = note.noteId;
+          if (!uniqueNotes.containsKey(noteId)) {
+            uniqueNotes[noteId] = note;
+          } else {
+            final existing = uniqueNotes[noteId]!;
+            // Use createAt and id to determine which is newer
+            if (note.createAt > existing.createAt ||
+                (note.createAt == existing.createAt && note.id > existing.id)) {
+              uniqueNotes[noteId] = note;
+            }
+          }
+        }
+        
+        // Delete existing records and reuse IDs to prevent duplicates
+        final collection = _indexedDB!.getCollection<NoteDBISAR>(collectionName);
+        final notesToSave = <NoteDBISAR>[];
+        
+        for (var note in uniqueNotes.values) {
+          final idsToDelete = await _getRawIdsForUniqueField('noteDBISARs', 'noteId', note.noteId);
+          
+          if (idsToDelete.isNotEmpty) {
+            await collection.deleteAll(idsToDelete);
+            note.id = idsToDelete.reduce((a, b) => a > b ? a : b);
+          }
+          
+          notesToSave.add(note);
+        }
+        
+        objects.clear();
+        objects.addAll(notesToSave);
         break;
       case MessageDBISAR:
         collectionName = 'messageDBISARs';
+        await _deduplicateAndSave<MessageDBISAR>(
+          objects,
+          collectionName,
+          'messageId',
+          (m) => m.messageId,
+          (m) => m.createTime,
+        );
         break;
       case GroupDBISAR:
         collectionName = 'groupDBISARs';
+        await _deduplicateAndSave<GroupDBISAR>(
+          objects,
+          collectionName,
+          'groupId',
+          (g) => g.groupId,
+          (g) => g.updateTime,
+        );
         break;
       case EventDBISAR:
         collectionName = 'eventDBISARs';
+        await _deduplicateAndSave<EventDBISAR>(
+          objects,
+          collectionName,
+          'eventId',
+          (e) => e.eventId,
+          (e) => e.id, // No timestamp field, use id
+        );
         break;
       case RelayGroupDBISAR:
         collectionName = 'relayGroupDBISARs';
+        
+        // Deduplicate by groupId (keep only the latest one for each groupId)
+        final groupObjects = objects.cast<RelayGroupDBISAR>();
+        final Map<String, RelayGroupDBISAR> uniqueGroups = {};
+        
+        for (var group in groupObjects) {
+          final groupId = group.groupId;
+          if (!uniqueGroups.containsKey(groupId)) {
+            uniqueGroups[groupId] = group;
+          } else {
+            final existing = uniqueGroups[groupId]!;
+            if (group.lastUpdatedTime > existing.lastUpdatedTime ||
+                (group.lastUpdatedTime == existing.lastUpdatedTime && group.id > existing.id)) {
+              uniqueGroups[groupId] = group;
+            }
+          }
+        }
+        
+        // Delete existing records and reuse IDs to prevent duplicates
+        final collection = _indexedDB!.getCollection<RelayGroupDBISAR>(collectionName);
+        final groupsToSave = <RelayGroupDBISAR>[];
+        
+        for (var group in uniqueGroups.values) {
+          final idsToDelete = await _getRawIdsForUniqueField('relayGroupDBISARs', 'groupId', group.groupId);
+          
+          if (idsToDelete.isNotEmpty) {
+            await collection.deleteAll(idsToDelete);
+            group.id = idsToDelete.reduce((a, b) => a > b ? a : b);
+          }
+          
+          groupsToSave.add(group);
+        }
+        
+        objects.clear();
+        objects.addAll(groupsToSave);
         break;
       case ZapRecordsDBISAR:
         collectionName = 'zapRecordsDBISARs';
+        await _deduplicateAndSave<ZapRecordsDBISAR>(
+          objects,
+          collectionName,
+          'bolt11',
+          (z) => z.bolt11,
+          (z) => z.paidAt,
+        );
         break;
       case ZapsDBISAR:
         collectionName = 'zapsDBISARs';
+        // ZapsDBISAR has two unique fields: lnAddr and lnURL
+        // Deduplicate by lnAddr (primary unique field)
+        final zapObjects = objects.cast<ZapsDBISAR>();
+        final Map<String, ZapsDBISAR> uniqueZaps = {};
+        
+        for (var zap in zapObjects) {
+          final lnAddr = zap.lnAddr;
+          if (!uniqueZaps.containsKey(lnAddr)) {
+            uniqueZaps[lnAddr] = zap;
+          } else {
+            final existing = uniqueZaps[lnAddr]!;
+            if (zap.id > existing.id) {
+              uniqueZaps[lnAddr] = zap;
+            }
+          }
+        }
+        
+        final collection = _indexedDB!.getCollection<ZapsDBISAR>(collectionName);
+        final zapsToSave = <ZapsDBISAR>[];
+        
+        for (var zap in uniqueZaps.values) {
+          final idsToDelete = await _getRawIdsForUniqueField('zapsDBISARs', 'lnAddr', zap.lnAddr);
+          
+          if (idsToDelete.isNotEmpty) {
+            await collection.deleteAll(idsToDelete);
+            zap.id = idsToDelete.reduce((a, b) => a > b ? a : b);
+          }
+          
+          zapsToSave.add(zap);
+        }
+        
+        objects.clear();
+        objects.addAll(zapsToSave);
         break;
       case JoinRequestDBISAR:
         collectionName = 'joinRequestDBISARs';
+        await _deduplicateAndSave<JoinRequestDBISAR>(
+          objects,
+          collectionName,
+          'requestId',
+          (j) => j.requestId,
+          (j) => j.createdAt,
+        );
         break;
       case ModerationDBISAR:
         collectionName = 'moderationDBISARs';
+        await _deduplicateAndSave<ModerationDBISAR>(
+          objects,
+          collectionName,
+          'moderationId',
+          (m) => m.moderationId,
+          (m) => m.createdAt,
+        );
         break;
       case NotificationDBISAR:
         collectionName = 'notificationDBISARs';
+        await _deduplicateAndSave<NotificationDBISAR>(
+          objects,
+          collectionName,
+          'notificationId',
+          (n) => n.notificationId,
+          (n) => n.createAt,
+        );
         break;
       case ConfigDBISAR:
         collectionName = 'configDBISARs';
+        await _deduplicateAndSave<ConfigDBISAR>(
+          objects,
+          collectionName,
+          'd',
+          (c) => c.d,
+          (c) => c.time,
+        );
         break;
       case WalletInfo:
         collectionName = 'walletInfos';
+        await _deduplicateAndSave<WalletInfo>(
+          objects,
+          collectionName,
+          'walletId',
+          (w) => w.walletId,
+          (w) => w.lastUpdated,
+        );
         break;
       case WalletTransaction:
         collectionName = 'walletTransactions';
+        await _deduplicateAndSave<WalletTransaction>(
+          objects,
+          collectionName,
+          'transactionId',
+          (t) => t.transactionId,
+          (t) => t.createdAt,
+        );
         break;
       case WalletInvoice:
         collectionName = 'walletInvoices';
+        await _deduplicateAndSave<WalletInvoice>(
+          objects,
+          collectionName,
+          'invoiceId',
+          (i) => i.invoiceId,
+          (i) => i.createdAt,
+        );
         break;
       case FeedDraftDBISAR:
         collectionName = 'feedDraftDBISARs';
+        await _deduplicateAndSave<FeedDraftDBISAR>(
+          objects,
+          collectionName,
+          'author',
+          (f) => f.author,
+          (f) => f.updatedAt,
+        );
         break;
       default:
         debugPrint('[DB-Web] ⚠️ Unknown type for IndexedDB: $type');
@@ -558,10 +934,8 @@ class DBISAR {
     }
     
     final collection = _indexedDB!.getCollection<dynamic>(collectionName);
-    debugPrint('[DB-Web] 🔵 Putting ${objects.length} objects to collection: $collectionName');
     try {
       await collection.putAll(objects);
-      debugPrint('[DB-Web] ✅ Successfully saved ${objects.length} objects to $collectionName');
     } catch (e, stackTrace) {
       debugPrint('[DB-Web] ❌ Failed to save ${objects.length} objects to $collectionName: $e');
       debugPrint('[DB-Web] ❌ Stack trace: $stackTrace');

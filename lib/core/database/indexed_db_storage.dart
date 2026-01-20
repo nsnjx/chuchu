@@ -81,6 +81,10 @@ class IndexedDBStorage implements DatabaseInterface {
 
   @override
   bool get isOpen => _db != null;
+  
+  /// Get the raw IndexedDB database object (for advanced operations)
+  /// This is used internally for direct database access
+  dynamic get rawDb => _db;
 
   @override
   Future<void> open(String name) async {
@@ -92,8 +96,6 @@ class IndexedDBStorage implements DatabaseInterface {
         throw Exception('IndexedDB is not supported in this browser');
       }
 
-      debugPrint('[DB-Web] 🔵 Opening database: $_dbName');
-      
       // Define all collection names
       final collectionNames = [
         'userDBISARs',
@@ -129,7 +131,6 @@ class IndexedDBStorage implements DatabaseInterface {
           }
         }
       });
-      debugPrint('[DB-Web] ✅ Database opened successfully: $_dbName');
 
       // Initialize auto-increment counters
       await _initializeAutoIncrementCounters();
@@ -251,7 +252,6 @@ class IndexedDBCollection<T> implements CollectionInterface<T> {
     if (objects.isEmpty) return;
 
     try {
-      debugPrint('[DB-Web] 🔵 putAll: Starting to put ${objects.length} objects to $_collectionName');
       final transaction = _db.transaction(_collectionName, 'readwrite');
       final store = transaction.objectStore(_collectionName);
 
@@ -270,10 +270,8 @@ class IndexedDBCollection<T> implements CollectionInterface<T> {
         // store.put() returns an IdbRequest, need to convert to Future
         final putRequest = store.put(map);
         putFutures.add(_requestToFuture<void>(putRequest));
-        debugPrint('[DB-Web] 🔵 putAll: Added put request ${i + 1}/${objects.length} for object with id: ${map['id']}');
       }
       
-      debugPrint('[DB-Web] 🔵 putAll: Waiting for ${putFutures.length} put operations to complete...');
       // Wait for all put operations to complete, add timeout handling
       try {
         await Future.wait(putFutures).timeout(
@@ -283,7 +281,6 @@ class IndexedDBCollection<T> implements CollectionInterface<T> {
             throw TimeoutException('putAll operation timed out after 10 seconds');
           },
         );
-        debugPrint('[DB-Web] ✅ Successfully put ${objects.length} objects to collection: $_collectionName');
       } catch (e) {
         debugPrint('[DB-Web] ❌ putAll: Error waiting for put operations: $e');
         rethrow;
@@ -860,18 +857,15 @@ class IndexedDBQueryBuilder<T> implements QueryBuilderInterface<T> {
   @override
   Future<List<T>> findAll({int? limit, int? offset}) async {
     try {
-      debugPrint('[DB-Web] 🔵 findAll() called for collection: $_collectionName');
       final transaction = _db.transaction(_collectionName, 'readonly');
       final store = transaction.objectStore(_collectionName);
       // getAll() requires an optional key range parameter, pass null to get all
       final request = store.getAll(null);
       final allObjects = await _requestToFuture<List>(request);
-      debugPrint('[DB-Web] 🔵 getAll() returned ${allObjects.length} raw objects');
 
       // Convert to List<Map<String, dynamic>>
       // IndexedDB returns LinkedMap<dynamic, dynamic>, need to convert to Map<String, dynamic>
       final allMaps = allObjects.map((obj) => _convertToMapStringDynamic(obj)).toList();
-      debugPrint('[DB-Web] 🔵 Converted to ${allMaps.length} maps');
       
       // Apply filter conditions
       List<Map<String, dynamic>> filtered = allMaps;
@@ -888,21 +882,13 @@ class IndexedDBQueryBuilder<T> implements QueryBuilderInterface<T> {
       }
 
       // Convert to object list - use collection's _deserialize method
-      debugPrint('[DB-Web] 🔵 Deserializing ${filtered.length} maps to objects, collection: ${_collection != null ? "provided" : "null"}');
       List<T> result = [];
-      int successCount = 0;
-      int errorCount = 0;
       if (_collection != null) {
         for (var map in filtered) {
           try {
             result.add(_collection._deserialize(map));
-            successCount++;
-          } catch (e, stackTrace) {
-            errorCount++;
-            debugPrint('[DB-Web] ❌ Error deserializing item $errorCount in findAll with collection: $e');
-            debugPrint('[DB-Web] ❌ Map type: ${map.runtimeType}, collectionName: $_collectionName');
-            debugPrint('[DB-Web] ❌ Map keys: ${map.keys.take(10).toList()}');
-            debugPrint('[DB-Web] ❌ Stack trace: $stackTrace');
+          } catch (e) {
+            debugPrint('[DB-Web] ❌ Error deserializing item in findAll with collection: $e');
             // Don't rethrow, continue processing other objects
           }
         }
@@ -911,18 +897,12 @@ class IndexedDBQueryBuilder<T> implements QueryBuilderInterface<T> {
         for (var map in filtered) {
           try {
             result.add(IndexedDBCollection._deserializeFromMap<T>(map, _collectionName));
-            successCount++;
-          } catch (e, stackTrace) {
-            errorCount++;
-            debugPrint('[DB-Web] ❌ Error deserializing item $errorCount in findAll without collection: $e');
-            debugPrint('[DB-Web] ❌ Map type: ${map.runtimeType}, collectionName: $_collectionName');
-            debugPrint('[DB-Web] ❌ Map keys: ${map.keys.take(10).toList()}');
-            debugPrint('[DB-Web] ❌ Stack trace: $stackTrace');
+          } catch (e) {
+            debugPrint('[DB-Web] ❌ Error deserializing item in findAll without collection: $e');
             // Don't rethrow, continue processing other objects
           }
         }
       }
-      debugPrint('[DB-Web] 🔵 Successfully deserialized $successCount objects, errors: $errorCount');
       return result;
     } catch (e, stackTrace) {
       debugPrint('[DB-Web] ❌ Error in findAll: $e');

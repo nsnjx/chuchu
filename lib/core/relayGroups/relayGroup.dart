@@ -136,7 +136,7 @@ class RelayGroup {
       maps = await DBISAR.sharedInstance.findAllRelayGroups();
     } else {
       // Mobile platform uses Isar
-      final isar = DBISAR.sharedInstance.isar;
+    final isar = DBISAR.sharedInstance.isar;
       maps = await isar.relayGroupDBISARs.where().findAll();
     }
     for (RelayGroupDBISAR e in maps) {
@@ -426,12 +426,12 @@ class RelayGroup {
       await DBISAR.sharedInstance.deleteRelayGroupByGroupId(groupId);
     } else {
       // Mobile platform uses Isar
-      await DBISAR.sharedInstance.isar.write((isar) async {
-        await DBISAR.sharedInstance.isar.relayGroupDBISARs
-            .where()
-            .groupIdEqualTo(groupId)
-            .deleteAll();
-      });
+    await DBISAR.sharedInstance.isar.write((isar) async {
+      await DBISAR.sharedInstance.isar.relayGroupDBISARs
+          .where()
+          .groupIdEqualTo(groupId)
+          .deleteAll();
+    });
     }
   }
 
@@ -522,12 +522,12 @@ class RelayGroup {
       messages.sort((a, b) => b.createTime.compareTo(a.createTime));
       messages = messages.take(3).toList();
     } else {
-      final isar = DBISAR.sharedInstance.isar;
+    final isar = DBISAR.sharedInstance.isar;
       messages = await isar.messageDBISARs
-          .where()
-          .groupIdEqualTo(groupId)
-          .sortByCreateTimeDesc()
-          .findAll(limit: 3);
+        .where()
+        .groupIdEqualTo(groupId)
+        .sortByCreateTimeDesc()
+        .findAll(limit: 3);
     }
     for (var message in messages) {
       previous.add(message.messageId.substring(0, 8));
