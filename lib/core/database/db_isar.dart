@@ -22,7 +22,8 @@ import '../wallet/model/wallet_info.dart';
 import '../wallet/model/wallet_transaction.dart';
 import '../wallet/model/wallet_invoice.dart';
 import '../feed/model/feedDraftDB_isar.dart';
-import 'indexed_db_storage.dart';
+// Conditional import: indexed_db_storage.dart only works on web (uses dart:html)
+import 'indexed_db_storage.dart' if (dart.library.io) 'indexed_db_storage_stub.dart';
 import 'database_interface.dart';
 
 class DBISAR {

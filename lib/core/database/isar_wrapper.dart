@@ -1,7 +1,8 @@
 import 'dart:async';
 import 'package:isar/isar.dart';
 import 'package:flutter/foundation.dart' show kIsWeb, debugPrint;
-import 'indexed_db_storage.dart';
+// Conditional import: indexed_db_storage.dart only works on web (uses dart:html)
+import 'indexed_db_storage.dart' if (dart.library.io) 'indexed_db_storage_stub.dart';
 import 'database_interface.dart';
 
 /// Isar wrapper
