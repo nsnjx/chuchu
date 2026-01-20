@@ -3,7 +3,7 @@ import 'package:chuchu/core/feed/feed+notification.dart';
 import 'package:chuchu/core/widgets/common_toast.dart';
 import 'package:chuchu/data/models/feed_extension_model.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show kIsWeb, debugPrint;
 import 'package:google_fonts/google_fonts.dart';
 import '../../../core/feed/feed.dart';
 import '../../../core/feed/model/noteDB_isar.dart';
@@ -93,25 +93,32 @@ class _FeedNotificationsPageState extends State<FeedNotificationsPage>
   }
 
   _loadNotificationData() async {
-    List<NotificationDBISAR> notificationList =
-        await Feed.sharedInstance.loadNotificationsFromDB(
-          _lastTimestamp ?? 0,
-          limit: _limit,
-        ) ??
-        [];
+    try {
+      List<NotificationDBISAR> notificationList =
+          await Feed.sharedInstance.loadNotificationsFromDB(
+            _lastTimestamp ?? 0,
+            limit: _limit,
+          ) ??
+          [];
 
-    List<AggregatedNotification> aggregatedNotifications =
-        _getAggregatedNotifications(notificationList);
-    _aggregatedNotifications.addAll(aggregatedNotifications);
+      List<AggregatedNotification> aggregatedNotifications =
+          _getAggregatedNotifications(notificationList);
+      _aggregatedNotifications.addAll(aggregatedNotifications);
 
-    // Only update _lastTimestamp if we have notifications
-    if (notificationList.isNotEmpty) {
-      _lastTimestamp = notificationList.last.createAt;
+      // Only update _lastTimestamp if we have notifications
+      if (notificationList.isNotEmpty) {
+        _lastTimestamp = notificationList.last.createAt;
+      }
+    } catch (e) {
+      debugPrint('[FeedNotifications] Error loading notifications: $e');
+      // Continue with empty list on error
+    } finally {
+      // Always set loading to false, even if there was an error
+      _isLoading = false;
+      if (mounted) {
+        setState(() {});
+      }
     }
-
-    // notificationList.length < _limit ? _refreshController.loadNoData() : _refreshController.loadComplete();
-    _isLoading = false;
-    setState(() {});
   }
 
   List<AggregatedNotification> _getAggregatedNotifications(
