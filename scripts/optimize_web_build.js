@@ -56,7 +56,11 @@ function generateHashedName(filePath) {
   const ext = getExtension(filePath);
   // Use base name without existing hashes to prevent double hashing
   const baseNameWithoutHash = getBaseNameWithoutHash(filePath);
-  const baseName = baseNameWithoutHash.replace(ext, ''); // Remove extension
+  // Remove extension from baseNameWithoutHash if it still has it
+  let baseName = baseNameWithoutHash;
+  if (baseNameWithoutHash.endsWith(ext)) {
+    baseName = baseNameWithoutHash.substring(0, baseNameWithoutHash.length - ext.length);
+  }
   const dir = path.dirname(filePath);
   const newName = `${baseName}-${hash}${ext}`;
   return path.join(dir, newName);
@@ -94,13 +98,15 @@ function getRelativePath(filePath) {
 
 /**
  * Extract base filename without hash suffixes
- * e.g., "AssetManifest.bin-c14fcfb0-c14fcfb0.json" -> "AssetManifest.bin"
+ * e.g., "AssetManifest.bin-c14fcfb0-c14fcfb0.json" -> "AssetManifest.bin.json"
+ * e.g., "canvaskit-48af530c-117b9fe7-122c1611.wasm" -> "canvaskit.wasm"
  */
 function getBaseNameWithoutHash(filePath) {
   const baseName = path.basename(filePath);
   // Remove all hash suffixes: -hash1-hash2-hash3.ext -> .ext
   // Pattern matches: - followed by 8 hex digits, repeated any number of times
-  const withoutHash = baseName.replace(/-[a-f0-9]{8}(?=-|\.)/gi, '');
+  // Use a more aggressive pattern that removes ALL consecutive hash patterns
+  const withoutHash = baseName.replace(/(-[a-f0-9]{8})+(?=\.)/gi, '');
   return withoutHash;
 }
 
@@ -118,18 +124,77 @@ function hasHashSuffix(filePath) {
  * Rename file with hash
  */
 function hashFile(filePath) {
-  // Skip if file already has a hash suffix (avoid double hashing)
-  if (hasHashSuffix(filePath)) {
+  // Check if file exists before processing
+  if (!fs.existsSync(filePath)) {
     const relativePath = getRelativePath(filePath);
-    // If already hashed, use it as both original and hashed path
-    if (!resourceMap.has(relativePath)) {
-      resourceMap.set(relativePath, relativePath);
-    }
-    return filePath;
+    console.warn(`⚠️  Warning: File does not exist, skipping: ${relativePath}`);
+    return filePath; // Return original path even though file doesn't exist
   }
   
-  const hashedPath = generateHashedName(filePath);
-  const relativePath = getRelativePath(filePath);
+  const originalBaseName = path.basename(filePath);
+  const dir = path.dirname(filePath);
+  const ext = getExtension(filePath);
+  
+  // Always remove existing hashes first to prevent accumulation
+  let cleanFilePath = filePath;
+  if (hasHashSuffix(filePath)) {
+    const baseNameWithoutHash = getBaseNameWithoutHash(filePath);
+    // Ensure extension is preserved
+    let cleanBaseName = baseNameWithoutHash;
+    if (!cleanBaseName.endsWith(ext)) {
+      cleanBaseName = cleanBaseName + ext;
+    }
+    const cleanPath = path.join(dir, cleanBaseName);
+    
+    // Only rename if different and clean path doesn't exist or is different file
+    if (filePath !== cleanPath) {
+      try {
+        // Check if clean path exists before accessing
+        if (fs.existsSync(cleanPath)) {
+          // If clean file exists, check if it's the same file
+          const cleanStats = fs.statSync(cleanPath);
+          const currentStats = fs.statSync(filePath);
+          // If same size and modification time, they're likely the same, delete hashed version
+          if (cleanStats.size === currentStats.size && 
+              Math.abs(cleanStats.mtimeMs - currentStats.mtimeMs) < 1000) {
+            fs.unlinkSync(filePath);
+            cleanFilePath = cleanPath;
+          } else {
+            // Different files, keep hashed version but use clean name for new hash
+            // But we need to use the existing file, so use cleanPath
+            cleanFilePath = cleanPath;
+          }
+        } else {
+          // Clean path doesn't exist, rename to remove hashes
+          fs.renameSync(filePath, cleanPath);
+          cleanFilePath = cleanPath;
+        }
+      } catch (error) {
+        // If rename fails, continue with original path
+        console.warn(`⚠️  Warning: Could not remove existing hashes from ${originalBaseName}: ${error.message}`);
+        // Ensure file still exists, if not return original path
+        if (!fs.existsSync(filePath)) {
+          return filePath;
+        }
+      }
+    }
+  }
+  
+  // Verify clean file path exists before generating hash
+  if (!fs.existsSync(cleanFilePath)) {
+    const relativePath = getRelativePath(cleanFilePath);
+    console.warn(`⚠️  Warning: Clean file path does not exist, skipping: ${relativePath}`);
+    // Try to use original path if it exists
+    if (fs.existsSync(filePath)) {
+      cleanFilePath = filePath;
+    } else {
+      return filePath; // Return original path even though file doesn't exist
+    }
+  }
+  
+  // Now generate new hash based on clean file path
+  const hashedPath = generateHashedName(cleanFilePath);
+  const relativePath = getRelativePath(cleanFilePath);
   const relativeHashedPath = getRelativePath(hashedPath);
   
   // Check if the hashed filename would be too long (max 255 chars on most filesystems)
@@ -140,15 +205,15 @@ function hashFile(filePath) {
     if (!resourceMap.has(relativePath)) {
       resourceMap.set(relativePath, relativePath);
     }
-    return filePath;
+    return cleanFilePath;
   }
   
-  // Only rename if different
-  if (filePath !== hashedPath) {
+  // Only rename if different and file exists
+  if (cleanFilePath !== hashedPath && fs.existsSync(cleanFilePath)) {
     try {
-    fs.renameSync(filePath, hashedPath);
-    resourceMap.set(relativePath, relativeHashedPath);
-    console.log(`Hashed: ${relativePath} -> ${relativeHashedPath}`);
+      fs.renameSync(cleanFilePath, hashedPath);
+      resourceMap.set(relativePath, relativeHashedPath);
+      console.log(`Hashed: ${relativePath} -> ${relativeHashedPath}`);
     } catch (error) {
       if (error.code === 'ENAMETOOLONG') {
         console.warn(`⚠️  Warning: Filename too long, skipping hashing: ${relativePath}`);
@@ -156,7 +221,11 @@ function hashFile(filePath) {
         if (!resourceMap.has(relativePath)) {
           resourceMap.set(relativePath, relativePath);
         }
-        return filePath;
+        return cleanFilePath;
+      }
+      if (error.code === 'ENOENT') {
+        console.warn(`⚠️  Warning: File not found during rename: ${relativePath}`);
+        return cleanFilePath;
       }
       throw error;
     }
@@ -167,8 +236,11 @@ function hashFile(filePath) {
 
 /**
  * Update references in text content
+ * @param {string} content - File content to update
+ * @param {string} filePath - Path to the file being processed
+ * @param {Map} resourceMapToUse - Resource map to use (can be filtered for performance)
  */
-function updateReferences(content, filePath) {
+function updateReferences(content, filePath, resourceMapToUse = resourceMap) {
   let updated = content;
   
   // Performance optimization: Only process if content actually contains references
@@ -178,9 +250,10 @@ function updateReferences(content, filePath) {
   
   // For very large files, use a more efficient approach: batch processing
   const isLargeFile = content.length > 2 * 1024 * 1024; // 2MB threshold
-  const maxMappingsToCheck = isLargeFile ? 2000 : 5000; // Check more mappings for large files
+  const maxMappingsToCheck = isLargeFile ? 1000 : 3000; // Reduced for better performance
   
-  resourceMap.forEach((hashedPath, originalPath) => {
+  // Use the provided resource map (may be filtered)
+  resourceMapToUse.forEach((hashedPath, originalPath) => {
     const originalBase = path.basename(originalPath);
     // Quick check: only process if filename appears in content
     // For large files, use indexOf which is faster than includes for single checks
@@ -397,19 +470,97 @@ function escapeRegex(str) {
 }
 
 /**
- * Update file references
+ * Check if file content already contains hashed paths (skip if already processed)
+ * @param {string} content - File content to check
+ * @param {Map} resourceMapToUse - Resource map to check against
+ * @returns {boolean} - True if file appears to already be processed
  */
-function updateFileReferences(filePath) {
+function isFileAlreadyProcessed(content, resourceMapToUse) {
+  // Sample a few mappings to check if file is already processed
+  // If we find hashed paths in the content, likely already processed
+  let sampleCount = 0;
+  const maxSamples = Math.min(10, resourceMapToUse.size); // Check up to 10 samples
+  
+  for (const [originalPath, hashedPath] of resourceMapToUse) {
+    if (sampleCount >= maxSamples) break;
+    
+    const originalBase = path.basename(originalPath);
+    const hashedBase = path.basename(hashedPath);
+    
+    // If file contains hashed path but not original path, it's likely already processed
+    // But we need to be careful - check if hashed path is actually in the file
+    if (hashedPath !== originalPath && content.includes(hashedBase)) {
+      // Check if original path is NOT in content (meaning it was already replaced)
+      if (!content.includes(originalBase) || content.indexOf(hashedBase) < content.indexOf(originalBase)) {
+        sampleCount++;
+        continue;
+      }
+    }
+    
+    // If original path is still in content and hashed path is not, needs processing
+    if (content.includes(originalBase) && !content.includes(hashedBase)) {
+      return false; // Definitely needs processing
+    }
+    
+    sampleCount++;
+  }
+  
+  // If we sampled and all samples suggest it's processed, likely already done
+  // But be conservative - only skip if we're confident
+  if (sampleCount >= 5) {
+    // Additional check: count how many original paths vs hashed paths are in content
+    let originalCount = 0;
+    let hashedCount = 0;
+    let checkCount = 0;
+    
+    for (const [originalPath, hashedPath] of resourceMapToUse) {
+      if (checkCount >= 20) break; // Check up to 20 more mappings
+      
+      const originalBase = path.basename(originalPath);
+      const hashedBase = path.basename(hashedPath);
+      
+      if (content.includes(originalBase)) originalCount++;
+      if (content.includes(hashedBase)) hashedCount++;
+      
+      checkCount++;
+    }
+    
+    // If we see more hashed paths than original paths, likely already processed
+    if (hashedCount > originalCount * 2) {
+      return true;
+    }
+  }
+  
+  return false; // Default: process the file to be safe
+}
+
+/**
+ * Update file references
+ * @param {string} filePath - Path to file to update
+ * @param {Map} resourceMapToUse - Resource map to use (can be filtered for performance)
+ * @returns {boolean} - True if file was updated, false if skipped or unchanged
+ */
+function updateFileReferences(filePath, resourceMapToUse = resourceMap) {
   try {
   const content = fs.readFileSync(filePath, 'utf8');
-  const updated = updateReferences(content, filePath);
+    
+    // Quick check: if file appears already processed, skip it
+    if (isFileAlreadyProcessed(content, resourceMapToUse)) {
+      return false; // File already processed, skip
+    }
+    
+    const updated = updateReferences(content, filePath, resourceMapToUse);
   
   if (content !== updated) {
     fs.writeFileSync(filePath, updated, 'utf8');
+      return true; // File was updated
     }
+    
+    return false; // File unchanged
   } catch (error) {
     console.warn(`⚠️  Failed to process file: ${getRelativePath(filePath)} - ${error.message}`);
     // Continue processing other files even if one fails
+    return false;
   }
 }
 
@@ -1213,6 +1364,29 @@ function optimize() {
     return false;
   });
   
+  // Pre-filter resourceMap to only include mappings that are likely to be referenced
+  // This reduces the search space for each file update
+  const relevantResourceMap = new Map();
+  const criticalFileNames = new Set(criticalFiles.map(f => path.basename(f).toLowerCase()));
+  const criticalDirs = new Set(criticalFiles.map(f => path.dirname(getRelativePath(f))));
+  
+  resourceMap.forEach((hashedPath, originalPath) => {
+    const originalBase = path.basename(originalPath).toLowerCase();
+    const originalDir = path.dirname(originalPath);
+    
+    // Include if:
+    // 1. Filename matches any critical file (likely referenced)
+    // 2. Directory matches any critical file directory
+    // 3. It's a common asset type (fonts, images, etc.)
+    if (criticalFileNames.has(originalBase) ||
+        criticalDirs.has(originalDir) ||
+        /\.(ttf|otf|woff|woff2|png|jpg|jpeg|gif|svg|webp|ico|json|js|wasm|bin)$/i.test(originalPath)) {
+      relevantResourceMap.set(originalPath, hashedPath);
+    }
+  });
+  
+  console.log(`Filtered resource map: ${relevantResourceMap.size} relevant mappings (out of ${resourceMap.size} total)`);
+  
   // Count dependency files for reporting (check versions without modifying cache)
   const dependencyFiles = filesToUpdate.filter(isDependencyFile);
   let changedCount = 0;
@@ -1240,29 +1414,39 @@ function optimize() {
   
   console.log(`Found ${criticalFiles.length} critical files to update (out of ${filesToUpdate.length} total files)`);
   let processed = 0;
+  let updated = 0;
   let skipped = 0;
+  let alreadyProcessed = 0;
   const startTime = Date.now();
+  
+  // Use filtered resource map for better performance
+  const mapToUse = relevantResourceMap.size > 0 ? relevantResourceMap : resourceMap;
   
   criticalFiles.forEach((filePath, index) => {
     const baseName = path.basename(filePath);
     const relativePath = getRelativePath(filePath);
     
-    // Show current file being processed every 5 files or for important files
-    if (processed % 5 === 0 || baseName.startsWith('flutter_bootstrap') || 
+    // Show current file being processed every 10 files or for important files
+    if (processed % 10 === 0 || baseName.startsWith('flutter_bootstrap') || 
         baseName.startsWith('flutter_service_worker') || baseName === 'index.html') {
       process.stdout.write(`\r  Progress: ${processed}/${criticalFiles.length} (${Math.round(processed/criticalFiles.length*100)}%) - Processing: ${baseName.substring(0, 40)}...`);
     }
     
     try {
-      updateFileReferences(filePath);
+      const wasUpdated = updateFileReferences(filePath, mapToUse);
       processed++;
+      if (wasUpdated) {
+        updated++;
+      } else {
+        alreadyProcessed++;
+      }
     } catch (error) {
       skipped++;
       console.warn(`\n⚠️  Skipped file: ${relativePath} - ${error.message}`);
     }
     
-    // Show progress every 10 files
-    if (processed % 10 === 0) {
+    // Show progress every 20 files (reduced frequency for better performance)
+    if (processed % 20 === 0) {
       const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
       const rate = (processed / elapsed).toFixed(1);
       process.stdout.write(`\r  Progress: ${processed}/${criticalFiles.length} (${Math.round(processed/criticalFiles.length*100)}%) - ${rate} files/sec`);
@@ -1271,7 +1455,7 @@ function optimize() {
   
   if (processed > 0 || skipped > 0) {
     const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
-    console.log(`\n  Completed: ${processed} files updated, ${skipped} skipped (${elapsed}s)`);
+    console.log(`\n  Completed: ${updated} files updated, ${alreadyProcessed} already processed (skipped), ${skipped} failed (${elapsed}s)`);
   }
   
   // Step 9.1: Update index.html references (including explicit bootstrap and manifest updates)
@@ -1433,7 +1617,8 @@ function optimize() {
     );
     
     // Now update other references normally (but skip variable method calls)
-    swContent = updateReferences(swContent, swPath);
+    // Use full resource map for service workers as they reference many files
+    swContent = updateReferences(swContent, swPath, resourceMap);
     
     // Final fix: Ensure manifest.json() is not replaced again
     swContent = swContent.replace(
