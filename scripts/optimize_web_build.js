@@ -625,12 +625,23 @@ function createChunkLoader(chunkInfo) {
 (function() {
   'use strict';
   
+  // Disable verbose logs in web production; keep errors
+  const disableLogs = true;
+  if (disableLogs && typeof console !== 'undefined') {
+    ['log', 'debug', 'info'].forEach(m => {
+      try { console[m] = () => {}; } catch (e) {}
+    });
+  }
+  const clog = disableLogs ? () => {} : console.log.bind(console);
+  const cwarn = disableLogs ? () => {} : console.warn.bind(console);
+  const cerr = console.error.bind(console);
+  
   const chunks = ${JSON.stringify(chunkInfo.chunkFiles)};
   const basePath = document.baseURI || '';
   let loadedChunks = 0;
   const totalChunks = chunks.length;
   
-  console.log(\`Loading \${totalChunks} chunks for ${baseName}.js...\`);
+  clog(\`Loading \${totalChunks} chunks for ${baseName}.js...\`);
   
   // Load all chunks in parallel using XHR
   const loadPromises = chunks.map((chunk, index) => {
@@ -640,7 +651,7 @@ function createChunkLoader(chunkInfo) {
       xhr.onload = function() {
         if (xhr.status === 200 || xhr.status === 0) {
           loadedChunks++;
-          console.log(\`Loaded chunk \${index + 1}/\${totalChunks} (\${((loadedChunks / totalChunks) * 100).toFixed(1)}%)\`);
+          clog(\`Loaded chunk \${index + 1}/\${totalChunks} (\${((loadedChunks / totalChunks) * 100).toFixed(1)}%)\`);
           resolve(xhr.responseText);
         } else {
           reject(new Error(\`Failed to load chunk \${index + 1}: HTTP \${xhr.status}\`));
@@ -656,7 +667,7 @@ function createChunkLoader(chunkInfo) {
   // Wait for all chunks to load, then concatenate and execute
   Promise.all(loadPromises)
     .then(chunkContents => {
-      console.log('All chunks loaded, concatenating...');
+      clog('All chunks loaded, concatenating...');
       const fullCode = chunkContents.join('');
       
       // Create and execute script
@@ -664,18 +675,22 @@ function createChunkLoader(chunkInfo) {
       script.type = 'application/javascript';
       script.textContent = fullCode;
       
-      // Insert before other scripts to maintain execution order
-      const firstScript = document.getElementsByTagName('script')[0];
-      if (firstScript && firstScript.parentNode) {
-        firstScript.parentNode.insertBefore(script, firstScript);
-      } else {
+      // Append to head/body to avoid DOM insertion errors
+      if (document.head) {
         document.head.appendChild(script);
+      } else if (document.body) {
+        document.body.appendChild(script);
+      } else if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', function() {
+          const target = document.head || document.body;
+          if (target) target.appendChild(script);
+        });
       }
       
-      console.log('${baseName}.js chunks loaded and executed successfully');
+      clog('${baseName}.js chunks loaded and executed successfully');
     })
     .catch(error => {
-      console.error('Error loading ${baseName}.js chunks:', error);
+      cerr('Error loading ${baseName}.js chunks:', error);
       // Try to show user-friendly error
       if (document.body) {
         document.body.innerHTML = '<div style="padding: 20px; text-align: center; font-family: sans-serif;"><h2>Loading Error</h2><p>Failed to load application resources. Please refresh the page and try again.</p></div>';
@@ -1493,9 +1508,50 @@ function optimize() {
     );
   }
   
+  // Update favicon and icon references with cache-busting mechanism
+  // Since filenames already have content-based hashes, we use a build timestamp
+  // This ensures browsers refresh icons even if they're cached
+  // Note: If icon file content changes, the hash in filename will change automatically,
+  // so the browser will load the new file. The timestamp is an extra cache-busting layer.
+  const timestamp = Date.now();
+  
+  // Update existing version parameters with new timestamp
+  indexContent = indexContent.replace(
+    /(<link[^>]*rel=["'](?:icon|shortcut icon|apple-touch-icon)["'][^>]*href=["'])([^"']*?)(\?v=\d+)(["'])/gi,
+    (match, prefix, filePath, oldVersion, quote) => {
+      // Extract hash from filename if present (e.g., chuchu_ico-ebf633d3.ico)
+      const hashMatch = filePath.match(/-([a-f0-9]{8})\./i);
+      if (hashMatch) {
+        // Use hash from filename + timestamp for better cache busting
+        return `${prefix}${filePath}?v=${hashMatch[1]}-${timestamp}${quote}`;
+      }
+      // No hash in filename, just use timestamp
+      return `${prefix}${filePath}?v=${timestamp}${quote}`;
+    }
+  );
+  
+  // Add version parameter if it doesn't exist
+  indexContent = indexContent.replace(
+    /(<link[^>]*rel=["'](?:icon|shortcut icon|apple-touch-icon)["'][^>]*href=["'])([^"']*?)(["'])(?!\?)/gi,
+    (match, prefix, filePath, quote) => {
+      // Only add version if it doesn't already have one
+      if (!filePath.includes('?')) {
+        // Extract hash from filename if present
+        const hashMatch = filePath.match(/-([a-f0-9]{8})\./i);
+        if (hashMatch) {
+          // Use hash from filename + timestamp
+          return `${prefix}${filePath}?v=${hashMatch[1]}-${timestamp}${quote}`;
+        }
+        // No hash in filename, just use timestamp
+        return `${prefix}${filePath}?v=${timestamp}${quote}`;
+      }
+      return match;
+    }
+  );
+
   if (indexContent !== originalIndexContent) {
     fs.writeFileSync(indexPath, indexContent, 'utf8');
-    console.log(`Updated ${INDEX_HTML} with hashed file references`);
+    console.log(`Updated ${INDEX_HTML} with hashed file references and cache-busting timestamps`);
   }
   
   // Step 9.2: Fix CanvasKit paths - create chromium subdirectory if needed
@@ -1545,6 +1601,25 @@ function optimize() {
   
   console.log(`Found ${serviceWorkerFiles.length} Service Worker files to update...`);
   let swProcessed = 0;
+  
+  // Get final hashed loader path and chunk files if chunks were created
+  let finalLoaderPath = null;
+  let finalChunkFiles = [];
+  if (chunkInfo && loaderPath) {
+    // Find the hashed loader file
+    const loaderFiles = fs.readdirSync(BUILD_DIR)
+      .filter(f => f.startsWith('chunk-loader-main.dart-') && f.endsWith('.js'))
+      .map(f => path.basename(f));
+    if (loaderFiles.length > 0) {
+      finalLoaderPath = loaderFiles[0];
+      // Get all hashed chunk files
+      finalChunkFiles = fs.readdirSync(BUILD_DIR)
+        .filter(f => f.startsWith('main.dart-chunk-') && f.endsWith('.js'))
+        .map(f => path.basename(f))
+        .sort(); // Sort for consistent ordering
+    }
+  }
+  
   serviceWorkerFiles.forEach(swPath => {
     let swContent = fs.readFileSync(swPath, 'utf8');
     const originalContent = swContent;
@@ -1616,6 +1691,72 @@ function optimize() {
   return Promise.all(corePromises);`
     );
     
+    // Special handling: Replace main.dart.js with chunk loader and chunks if chunks were created
+    if (finalLoaderPath && finalChunkFiles.length > 0) {
+      // 1. Remove main.dart.js from JSON manifest mapping
+      // Pattern: "main.dart.js": "hash",
+      swContent = swContent.replace(
+        /"main\.dart\.js"\s*:\s*"[^"]*",?\s*/g,
+        ''
+      );
+      
+      // 2. Replace main.dart.js in CORE array with chunk loader and all chunks
+      // Pattern: const CORE = ["main.dart.js", ...] or CORE = ["main.dart.js", ...]
+      const chunkLoaderAndChunks = [finalLoaderPath, ...finalChunkFiles];
+      swContent = swContent.replace(
+        /(const\s+CORE\s*=\s*\[)\s*"main\.dart\.js"\s*,?\s*/g,
+        `$1${chunkLoaderAndChunks.map(f => `"${f}"`).join(', ')}, `
+      );
+      // Also handle without const
+      swContent = swContent.replace(
+        /(CORE\s*=\s*\[)\s*"main\.dart\.js"\s*,?\s*/g,
+        `$1${chunkLoaderAndChunks.map(f => `"${f}"`).join(', ')}, `
+      );
+      
+      // 3. Replace any remaining "main.dart.js" string references
+      swContent = swContent.replace(
+        /"main\.dart\.js"/g,
+        `"${finalLoaderPath}"`
+      );
+      swContent = swContent.replace(
+        /'main\.dart\.js'/g,
+        `'${finalLoaderPath}'`
+      );
+      
+      // 4. Add chunk loader and chunk files to JSON manifest with their hashes
+      // Find the JSON manifest section (usually at the beginning of the file)
+      // Pattern: {"file1": "hash1", "file2": "hash2", ...}
+      // Use the chunkLoaderAndChunks array already declared above
+      chunkLoaderAndChunks.forEach(fileName => {
+        const filePath = path.join(BUILD_DIR, fileName);
+        if (fs.existsSync(filePath)) {
+          try {
+            const fileContent = fs.readFileSync(filePath);
+            const fileHash = crypto.createHash('md5').update(fileContent).digest('hex');
+            // Escape special regex characters in filename
+            const escapedFileName = fileName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            // Check if this file is already in the manifest
+            const filePattern = new RegExp(`"${escapedFileName}"\\s*:\\s*"[^"]*"`, 'g');
+            if (!swContent.match(filePattern)) {
+              // Add it to the manifest (insert after index.html entry, which should exist)
+              swContent = swContent.replace(
+                /("index\.html"\s*:\s*"[^"]*",?\s*)/,
+                `$1"${fileName}": "${fileHash}",\n`
+              );
+            } else {
+              // Update existing entry with correct hash
+              swContent = swContent.replace(
+                filePattern,
+                `"${fileName}": "${fileHash}"`
+              );
+            }
+          } catch (e) {
+            console.warn(`Warning: Failed to calculate hash for ${fileName}: ${e.message}`);
+          }
+        }
+      });
+    }
+    
     // Now update other references normally (but skip variable method calls)
     // Use full resource map for service workers as they reference many files
     swContent = updateReferences(swContent, swPath, resourceMap);
@@ -1625,6 +1766,18 @@ function optimize() {
       /await\s+manifest_[a-f0-9_]+\.json\(\)/g,
       'await manifest.json()'
     );
+    
+    // Final fix: Remove any remaining main.dart.js references (should not exist after chunking)
+    if (finalLoaderPath) {
+      swContent = swContent.replace(
+        /"main\.dart\.js"/g,
+        `"${finalLoaderPath}"`
+      );
+      swContent = swContent.replace(
+        /'main\.dart\.js'/g,
+        `'${finalLoaderPath}'`
+      );
+    }
     
     if (swContent !== originalContent) {
       fs.writeFileSync(swPath, swContent, 'utf8');

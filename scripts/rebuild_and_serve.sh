@@ -45,13 +45,17 @@ else
 fi
 sleep 1
 
-# 2. Clean old build files (optional)
-# echo -e "${YELLOW}Step 2: Cleaning old build files...${NC}"
-# rm -rf build/web
-# echo "Cleaned"
+# 2. Clean old build files
+echo -e "\n${YELLOW}Step 2: Cleaning old build files...${NC}"
+if [ -d "build/web" ]; then
+    rm -rf build/web
+    echo -e "${GREEN}✅ Removed old build/web directory${NC}"
+else
+    echo -e "${YELLOW}ℹ️  No existing build/web directory to clean${NC}"
+fi
 
 # 3. Flutter build
-echo -e "\n${YELLOW}Step 2: Flutter Web build...${NC}"
+echo -e "\n${YELLOW}Step 3: Flutter Web build...${NC}"
 flutter build web --release
 
 if [ $? -ne 0 ]; then
@@ -62,7 +66,7 @@ fi
 echo -e "${GREEN}✅ Flutter build completed${NC}"
 
 # 4. Run optimization script
-echo -e "\n${YELLOW}Step 3: Running optimization script...${NC}"
+echo -e "\n${YELLOW}Step 4: Running optimization script...${NC}"
 node scripts/optimize_web_build.js
 
 if [ $? -ne 0 ]; then
@@ -72,8 +76,15 @@ fi
 
 echo -e "${GREEN}✅ Optimization completed${NC}"
 
+# 4.5. Verify build (optional, non-blocking)
+if [ -f "$PROJECT_ROOT/scripts/verify_build.sh" ]; then
+    echo -e "\n${YELLOW}Step 4.5: Verifying build...${NC}"
+    "$PROJECT_ROOT/scripts/verify_build.sh" || true  # Don't fail on warnings
+    echo ""
+fi
+
 # 5. Start server
-echo -e "\n${YELLOW}Step 4: Starting server...${NC}"
+echo -e "\n${YELLOW}Step 5: Starting server...${NC}"
 cd build/web
 
 # Check if port is available
