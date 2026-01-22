@@ -156,4 +156,13 @@ class Feed {
   void clearNewNotifications() {
     newNotifications.clear();
   }
+
+  /// Clear all caches when user logs out or switches account
+  void clearCache() {
+    notesCache.clear();
+    newNotes.clear();
+    newNotifications.clear();
+    latestNoteTime = 0;
+    latestNotificationTime = 0;
+  }
 }

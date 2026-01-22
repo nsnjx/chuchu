@@ -85,6 +85,9 @@ class IndexedDBStorage implements DatabaseInterface {
   /// Get the raw IndexedDB database object (for advanced operations)
   /// This is used internally for direct database access
   dynamic get rawDb => _db;
+  
+  /// Get the database name (for debugging)
+  String? get dbName => _dbName;
 
   @override
   Future<void> open(String name) async {

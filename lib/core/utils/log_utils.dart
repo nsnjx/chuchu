@@ -1,5 +1,3 @@
-import 'package:flutter/foundation.dart';
-
 typedef LogCreator = String Function();
 
 class LogUtils {
@@ -14,13 +12,12 @@ class LogUtils {
   static void e(LogCreator fn) => _print('E', fn);
 
   static void _print(String level, LogCreator fn) {
-    if (kDebugMode) {
-      try {
-        final message = fn.call();
-        print('[$level] $message');
-      } catch (e) {
-        print('$e');
-      }
+    // Enable logs in production for debugging
+    try {
+      final message = fn.call();
+      print('[$level] $message');
+    } catch (e) {
+      print('$e');
     }
   }
 }

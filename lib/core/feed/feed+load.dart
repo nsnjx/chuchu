@@ -878,16 +878,8 @@ extension Load on Feed {
     int? limit,
     String? keyword,
   }) async {
-    debugPrint('[DB-Web] 🔵🔵🔵 loadAllMyGroupsNotesFromDB METHOD CALLED! isWeb: ${kIsWeb}');
     // Get all group IDs that the current user has joined
     List<String> myGroupIds = RelayGroup.sharedInstance.myGroups.keys.toList();
-    debugPrint('[DB-Web] 🔵 myGroupIds count: ${myGroupIds.length}, ids: $myGroupIds');
-    
-    // If user has no groups, we still query the database to see if there's any data
-    // This helps debug whether the issue is empty groups or empty database
-    if (myGroupIds.isEmpty) {
-      debugPrint('[DB-Web] ⚠️ No groups found, but will still query database to check for data');
-    }
 
     final bool isWeb = kIsWeb;
     final List<NoteDBISAR> aggregated = [];
@@ -912,43 +904,29 @@ extension Load on Feed {
     // Web platform uses IndexedDB, mobile platform uses Isar
     if (isWeb) {
       try {
-        debugPrint('[DB-Web] 🔵 Starting Web query, myGroupIds: $myGroupIds');
         // Web platform: use IndexedDB query
         final indexedDB = DBISAR.sharedInstance.indexedDB;
-        if (indexedDB == null) {
-          debugPrint('[DB-Web] ❌ IndexedDB is null');
-          return _finalizeNoteResults(aggregated, limit);
-        }
-        if (!indexedDB.isOpen) {
-          debugPrint('[DB-Web] ❌ IndexedDB is not open, isOpen: ${indexedDB.isOpen}');
+        if (indexedDB == null || !indexedDB.isOpen) {
           return _finalizeNoteResults(aggregated, limit);
         }
         
-        debugPrint('[DB-Web] 🔵 Getting collection: noteDBISARs');
         final collection = indexedDB.getCollection<NoteDBISAR>('noteDBISARs');
         final query = collection.where();
         
-        debugPrint('[DB-Web] 🔵 Calling findAll()...');
         // Apply groupId filter (anyOf needs manual implementation in IndexedDB)
         // First get all notes, then filter in memory
         List<NoteDBISAR> allNotes = await query.findAll();
-        debugPrint('[DB-Web] 🔵 Found ${allNotes.length} total notes from IndexedDB');
-        debugPrint('[DB-Web] 🔵 Filtering by groupIds: $myGroupIds');
         
         // Filter in memory: only keep notes whose groupId is in myGroupIds
-        // If myGroupIds is empty, show all notes (for debugging)
         if (myGroupIds.isNotEmpty) {
           allNotes = allNotes.where((note) => myGroupIds.contains(note.groupId)).toList();
-          debugPrint('[DB-Web] 🔵 After groupId filter: ${allNotes.length} notes');
-        } else {
-          debugPrint('[DB-Web] ⚠️ myGroupIds is empty, showing all ${allNotes.length} notes (for debugging)');
         }
         
         // Apply other filter conditions
         if (authors != null && authors.isNotEmpty) {
           allNotes = allNotes.where((note) => authors.contains(note.author)).toList();
         }
-        if (root != null) {
+        if (root != null && root.isNotEmpty) {
           allNotes = allNotes.where((note) => note.root == root).toList();
         }
         if (reply != null) {
@@ -978,28 +956,22 @@ extension Load on Feed {
         }
         if (keyword != null && keyword.isNotEmpty) {
           allNotes = allNotes.where((note) => 
-            note.content != null && note.content!.toLowerCase().contains(keyword.toLowerCase())
+            note.content.toLowerCase().contains(keyword.toLowerCase())
           ).toList();
         }
         
         // Sort by createAt in descending order
         allNotes.sort((a, b) => b.createAt.compareTo(a.createAt));
-        debugPrint('[DB-Web] 🔵 After sorting: ${allNotes.length} notes');
         
         // Apply limit
         if (limit != null && limit > 0) {
           allNotes = allNotes.take(limit).toList();
-          debugPrint('[DB-Web] 🔵 After limit ($limit): ${allNotes.length} notes');
         }
         
         addNotes(allNotes);
-        debugPrint('[DB-Web] 🔵 Final aggregated count: ${aggregated.length} notes');
-        final result = _finalizeNoteResults(aggregated, limit);
-        debugPrint('[DB-Web] 🔵 Final result count: ${result.length} notes');
-        return result;
-      } catch (e, stackTrace) {
-        debugPrint('[DB-Web] ❌ Error in Web query: $e');
-        debugPrint('[DB-Web] ❌ Stack trace: $stackTrace');
+        return _finalizeNoteResults(aggregated, limit);
+      } catch (e) {
+        debugPrint('[DB-Web] Error loading notes: $e');
         return _finalizeNoteResults(aggregated, limit);
       }
     }

@@ -90,11 +90,14 @@ class DBISAR {
       throw ArgumentError('pubkey cannot be empty');
     }
     
+    // Close existing database before opening a new one
+    // This ensures clean state when switching users
+    await closeDatabase();
+    
     if (kIsWeb) {
       // Web platform uses IndexedDB
       _indexedDB = IndexedDBStorage();
       await _indexedDB!.open(pubkey);
-        debugPrint('[DB-Web] ✅ IndexedDB database opened successfully');
         // Process buffered data after database is opened
       if (_buffers.isNotEmpty) {
         debugPrint('[DB-Web] 🔵 Processing ${_buffers.length} buffered data types after database open');
@@ -1033,12 +1036,18 @@ class DBISAR {
     _timer?.cancel();
     _timer = null;
     if (kIsWeb) {
-      if (_indexedDB != null && _indexedDB!.isOpen) {
-        await _indexedDB!.close();
+      if (_indexedDB != null) {
+        if (_indexedDB!.isOpen) {
+          await _indexedDB!.close();
+        }
+        _indexedDB = null; // Clear reference after closing
       }
     } else {
-      if (_isar != null && _isar!.isOpen) {
-        await _isar!.close();
+      if (_isar != null) {
+        if (_isar!.isOpen) {
+          await _isar!.close();
+        }
+        _isar = null; // Clear reference after closing
       }
     }
   }

@@ -240,6 +240,7 @@ class _FeedPageState extends State<FeedPage>
     _allNotesFromDBLastTimestamp = null;
     _seenNoteIds.clear();
     _hasInitializedNotes = false;
+    _notificationGroupNotes.clear(); // Clear notification notes when resetting
     if (mounted) {
       setState(() {});
     }
@@ -700,21 +701,16 @@ class _FeedPageState extends State<FeedPage>
     }
 
     try {
-      // List<NoteDBISAR> list = await _getNoteTypeToDB(isInit);
-      debugPrint('[DB-Web] 🔵 FeedPage loading notes, isInit: $isInit, until: ${isInit ? null : _allNotesFromDBLastTimestamp}');
       List<NoteDBISAR> list = await RelayGroup.sharedInstance.loadAllMyGroupsNotesFromDB(
           until: isInit ? null : _allNotesFromDBLastTimestamp,
           limit: _limit) ??
           [];
-      
-      debugPrint('[DB-Web] 🔵 FeedPage loaded ${list.length} notes from database');
       
       if (!mounted) {
         return;
       }
       
       if (list.isEmpty) {
-        debugPrint('[DB-Web] ⚠️ FeedPage no notes found, isInit: $isInit');
         isInit
             ? refreshController.refreshCompleted()
             : refreshController.loadNoData();
@@ -727,7 +723,6 @@ class _FeedPageState extends State<FeedPage>
       }
 
       List<NoteDBISAR> showList = _filterNotes(list);
-      debugPrint('🔵 [FeedPage] After filtering: ${showList.length} notes');
       _updateUI(showList, isInit, list.length);
       
       // Ensure loading state is cleared after UI update
@@ -766,16 +761,13 @@ class _FeedPageState extends State<FeedPage>
         return;
       }
 
-      debugPrint('🔵 [FeedPage] _updateUI called, isInit: $isInit, showList.length: ${showList.length}');
       final List<NotedUIModel?> list =
           showList.map((item) => NotedUIModel(noteDB: item)).toList();
 
       if (isInit) {
         notesList = list;
-        debugPrint('🔵 [FeedPage] Updated notesList (init), new length: ${notesList.length}');
       } else {
         notesList.addAll(list);
-        debugPrint('🔵 [FeedPage] Added to notesList, new length: ${notesList.length}');
       }
 
       if (showList.isNotEmpty) {
@@ -933,7 +925,12 @@ class _FeedPageState extends State<FeedPage>
   }
 
   @override
-  void didSwitchUser(UserDBISAR? userInfo) {}
+  void didSwitchUser(UserDBISAR? userInfo) {
+    // Reset data when switching user to ensure clean state
+    _resetData();
+    // Re-initialize data for the new user
+    _initData();
+  }
 }
 
 class StoryCircle extends StatelessWidget {

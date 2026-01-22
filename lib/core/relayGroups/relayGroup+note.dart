@@ -290,21 +290,15 @@ extension ENote on RelayGroup {
   }
 
   Future<List<NoteDBISAR>?> loadAllMyGroupsNotesFromDB({int limit = 50, int? until}) async {
-    debugPrint('[DB-Web] 🔵🔵🔵 RelayGroup.loadAllMyGroupsNotesFromDB CALLED! limit: $limit, until: $until');
-    // If until is null, it means to get all data (when refreshing), don't auto-set timestamp
-    // Only set default value when until explicitly needs to limit time range
-    // until ??= currentUnixTimestampSeconds() + 1; // Remove this line, let null pass through
     try {
       List<NoteDBISAR>? notes =
           await Feed.sharedInstance.loadAllMyGroupsNotesFromDB(until: until, limit: limit);
-      debugPrint('[DB-Web] 🔵🔵🔵 Got ${notes.length} notes from Feed');
       for (var note in notes) {
         Feed.sharedInstance.notesCache[note.noteId] = note;
       }
       return notes;
-    } catch (e, stackTrace) {
-      debugPrint('[DB-Web] ❌❌❌ RelayGroup.loadAllMyGroupsNotesFromDB ERROR: $e');
-      debugPrint('[DB-Web] ❌❌❌ Stack: $stackTrace');
+    } catch (e) {
+      debugPrint('[RelayGroup] Error loading notes: $e');
       rethrow;
     }
   }

@@ -186,6 +186,10 @@ class ChuChuUserInfoManager {
     await SecureAccountStorage.clearPrivateKeyForPubkey(
       currentUserInfo?.pubKey ?? '',
     );
+    // Clear Feed cache before closing database
+    Feed.sharedInstance.clearCache();
+    // Close database when logging out to ensure clean state
+    await DBISAR.sharedInstance.closeDatabase();
     resetData(needObserver: needObserver);
   }
 
