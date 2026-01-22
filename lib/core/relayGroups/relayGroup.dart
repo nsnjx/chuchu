@@ -193,6 +193,28 @@ class RelayGroup {
       }
       connectToRelays(groupRelays);
     }
+
+    // Fallback for web: if account list is empty but local groups contain current user, include them
+    if (kIsWeb && result.isEmpty && groups.isNotEmpty) {
+      final currentPubkey = me?.pubKey ?? Account.sharedInstance.currentPubkey;
+      groups.forEach((groupId, notifier) {
+        final g = notifier.value;
+        final members = g.members ?? [];
+        if (currentPubkey.isNotEmpty && members.contains(currentPubkey)) {
+          result[groupId] = notifier;
+        }
+      });
+      // If we added groups, ensure we are connected to their relays
+      if (result.isNotEmpty) {
+        groupRelays = Config.sharedInstance.recommendGroupRelays;
+        result.values.forEach((n) {
+          if (!groupRelays.contains(n.value.relay)) {
+            groupRelays.add(n.value.relay);
+          }
+        });
+        connectToRelays(groupRelays);
+      }
+    }
     return result;
   }
 
