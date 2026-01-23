@@ -80,8 +80,6 @@ class HomePageState extends State<HomePage> with SingleTickerProviderStateMixin,
   
   // Web content page state
   WebContentPage _currentWebPage = WebContentPage.home;
-  // Flag to show dialog when switching to myPosts page
-  bool _shouldShowMyPostsDialog = false;
   // Store nested Navigator context for each page to allow pushing from drawer menu
   final Map<WebContentPage, BuildContext?> _nestedNavigatorContexts = {};
 
@@ -90,9 +88,48 @@ class HomePageState extends State<HomePage> with SingleTickerProviderStateMixin,
   /// Public method to switch web content page (used by child widgets)
   void switchToWebPage(WebContentPage page, {bool showDialog = false}) {
     if (kIsWeb && mounted) {
+      // If switching to myPosts and user is not a creator, show dialog directly without switching page
+      if (page == WebContentPage.myPosts) {
+        final myRelayGroup = RelayGroup.sharedInstance.myGroups[Account.sharedInstance.currentPubkey]?.value;
+        if (myRelayGroup == null) {
+          // Show dialog directly without switching page
+          final homeNestedContext = getNestedNavigatorContext(WebContentPage.home);
+          final dialogContext = homeNestedContext ?? context;
+          FeedWidgetsUtils.showBecomeCreatorDialog(
+            dialogContext,
+            navigatorContext: homeNestedContext,
+            callback: (pushContext) async {
+              // Use ChuChuNavigator to handle both web and mobile
+              final result = await ChuChuNavigator.pushPage(
+                pushContext,
+                (context) => CreateCreatorPage(),
+                nestedNavigatorContext: kIsWeb ? pushContext : null,
+                fullscreenDialog: false,
+              );
+              // Return to home page (feed_page) regardless of result (success or cancel)
+              if (mounted) {
+                if (kIsWeb) {
+                  // If creator was created successfully, wait a bit for RelayGroup to update
+                  if (result != null && result == true) {
+                    await Future.delayed(const Duration(milliseconds: 100));
+                  }
+                  if (mounted) {
+                    setState(() {
+                      _currentWebPage = WebContentPage.home;
+                    });
+                  }
+                } else {
+                  setState(() {});
+                }
+              }
+            },
+          );
+          return; // Don't switch page
+        }
+      }
+      // User is a creator or switching to other page, proceed with page switch
       setState(() {
         _currentWebPage = page;
-        _shouldShowMyPostsDialog = showDialog && page == WebContentPage.myPosts;
       });
     }
   }
@@ -277,73 +314,36 @@ class HomePageState extends State<HomePage> with SingleTickerProviderStateMixin,
         );
       case WebContentPage.myPosts:
         final myRelayGroup = RelayGroup.sharedInstance.myGroups[Account.sharedInstance.currentPubkey]?.value;
+        // This should not happen if switchToWebPage is working correctly,
+        // but as a safety check, if somehow we reach here without creator, return to home
         if (myRelayGroup == null) {
+          // Return to home page if somehow reached here without creator
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) {
+              setState(() {
+                _currentWebPage = WebContentPage.home;
+              });
+            }
+          });
           return _wrapWithBackHandler(
             Builder(
               builder: (nestedContext) {
-                // Show dialog if flag is set (when switching from drawer menu)
-                if (_shouldShowMyPostsDialog && kIsWeb) {
-                  WidgetsBinding.instance.addPostFrameCallback((_) {
-                    _shouldShowMyPostsDialog = false;
-                    FeedWidgetsUtils.showBecomeCreatorDialog(
-                      nestedContext,
-                      navigatorContext: nestedContext,
-                      callback: (pushContext) async {
-                        // Use ChuChuNavigator to handle both web and mobile
-                        final result = await ChuChuNavigator.pushPage(
-                          pushContext,
-                          (context) => CreateCreatorPage(),
-                          nestedNavigatorContext: kIsWeb ? pushContext : null,
-                          fullscreenDialog: false,
-                        );
-                        // If creator was created successfully, refresh state and return to home
-                        if (result != null && result == true && mounted) {
-                          setState(() {});
-                          // Return to home page after creating creator
-                          if (kIsWeb) {
-                            setState(() {
-                              _currentWebPage = WebContentPage.home;
-                            });
-                          }
-                        }
-                      },
-                    );
-                  });
-                }
-                
-                return _buildWebPageWrapper(
-                  title: 'My Posts',
-                  showBackButton: false,
-                  child: Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Text('Become a creator to see your posts'),
-                        const SizedBox(height: 16),
-                        ElevatedButton(
-                          onPressed: () async {
-                            // Use ChuChuNavigator to handle both web and mobile
-                            final result = await ChuChuNavigator.pushPage(
-                              nestedContext,
-                              (context) => CreateCreatorPage(),
-                              nestedNavigatorContext: kIsWeb ? nestedContext : null,
-                              fullscreenDialog: false,
-                            );
-                            // If creator was created successfully, refresh state and return to home
-                            if (result != null && result == true && mounted) {
-                              setState(() {});
-                              // Return to home page after creating creator
-                              if (kIsWeb) {
-                                setState(() {
-                                  _currentWebPage = WebContentPage.home;
-                                });
-                              }
-                            }
-                          },
-                          child: Text('Become Creator'),
-                        ),
-                      ],
-                    ),
+                // Store nested Navigator context for home page
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  if (mounted) {
+                    _nestedNavigatorContexts[WebContentPage.home] = nestedContext;
+                  }
+                });
+                return Scaffold(
+                  appBar: _buildAppBar(context),
+                  body: Stack(
+                    children: [
+                      _buildCurrentPage(),
+                      Align(
+                        alignment: Alignment.bottomCenter,
+                        child: _buildBottomNavigationBar(context),
+                      ),
+                    ],
                   ),
                 );
               },
