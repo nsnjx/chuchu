@@ -1,6 +1,7 @@
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:qr_flutter/qr_flutter.dart';
@@ -273,18 +274,20 @@ class _WalletPageState extends State<WalletPage> with ChuChuUIRefreshMixin {
               () => _showSendDialog(),
             ),
           ),
-          SizedBox(width: 12),
-          Expanded(
-            child: _buildActionButton(
-              'Scan',
-              'scan_icon.png',
-              null,
-              Colors.white,
-              theme.colorScheme.onSurface,
-              () => _showScanDialog(),
-              useGradient: true,
+          if (!kIsWeb) ...[
+            SizedBox(width: 12),
+            Expanded(
+              child: _buildActionButton(
+                'Scan',
+                'scan_icon.png',
+                null,
+                Colors.white,
+                theme.colorScheme.onSurface,
+                () => _showScanDialog(),
+                useGradient: true,
+              ),
             ),
-          ),
+          ],
           SizedBox(width: 12),
           Expanded(
             child: _buildActionButton(
