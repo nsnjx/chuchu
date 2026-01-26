@@ -1,5 +1,6 @@
 import 'package:chuchu/core/widgets/common_image.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:chuchu/core/utils/ui_refresh_mixin.dart';
 import 'mode_selector.dart';
 import 'login_form.dart';
@@ -23,7 +24,7 @@ class _LoginPageState extends State<LoginPage> with ChuChuUIRefreshMixin {
 
   @override
   Widget buildBody(BuildContext context) {
-    return Scaffold(
+    Widget content = Scaffold(
       backgroundColor: Theme.of(context).colorScheme.surface,
       body: GestureDetector(
         behavior: HitTestBehavior.translucent,
@@ -140,5 +141,20 @@ class _LoginPageState extends State<LoginPage> with ChuChuUIRefreshMixin {
         ),
       ),
     );
+
+    // On web, center the content with max width constraint
+    if (kIsWeb) {
+      return Container(
+        color: Colors.white,
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 600),
+            child: content,
+          ),
+        ),
+      );
+    }
+
+    return content;
   }
 }

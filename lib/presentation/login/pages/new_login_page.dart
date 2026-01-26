@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'dart:ui';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:chuchu/core/theme/app_theme.dart';
 import 'package:chuchu/core/utils/ui_refresh_mixin.dart';
 import 'package:chuchu/core/utils/navigator/navigator.dart';
@@ -471,7 +472,8 @@ class _NewLoginPageState extends State<NewLoginPage> with ChuChuUIRefreshMixin {
   Widget buildBody(BuildContext context) {
     final screenSize = MediaQuery.of(context).size;
     final theme = Theme.of(context);
-    return AnnotatedRegion<SystemUiOverlayStyle>(
+    
+    Widget scaffoldContent = AnnotatedRegion<SystemUiOverlayStyle>(
       value: SystemUiOverlayStyle.dark,
       child: Scaffold(
         body: SizedBox.expand(
@@ -703,6 +705,21 @@ class _NewLoginPageState extends State<NewLoginPage> with ChuChuUIRefreshMixin {
         ),
       ),
     );
+
+    // On web, center the content with max width constraint
+    if (kIsWeb) {
+      return Container(
+        color: Colors.white,
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 600),
+            child: scaffoldContent,
+          ),
+        ),
+      );
+    }
+
+    return scaffoldContent;
   }
 
   Widget _buildStatusIndicator() {

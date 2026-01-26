@@ -1,5 +1,6 @@
 import 'package:chuchu/core/widgets/common_image.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:google_fonts/google_fonts.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/widgets/gradient_button.dart';
@@ -63,7 +64,7 @@ class _OnboardingPageState extends State<OnboardingPage> {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    Widget content = Container(
      
       color: kBgLight,
       child: SafeArea(
@@ -128,6 +129,21 @@ class _OnboardingPageState extends State<OnboardingPage> {
         ),
       ),
     );
+
+    // On web, center the content with max width constraint
+    if (kIsWeb) {
+      return Container(
+        color: Colors.white,
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 600),
+            child: content,
+          ),
+        ),
+      );
+    }
+
+    return content;
   }
 
   Widget _buildPage(OnboardingItem item) {

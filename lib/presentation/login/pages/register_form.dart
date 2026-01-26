@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'dart:ui';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:google_fonts/google_fonts.dart';
 import 'package:chuchu/core/utils/navigator/navigator.dart';
 import 'package:chuchu/core/account/account.dart';
@@ -56,7 +57,8 @@ class _RegisterFormState extends State<RegisterForm> {
   Widget build(BuildContext context) {
     final screenSize = MediaQuery.of(context).size;
     final theme = Theme.of(context);
-    return AnnotatedRegion<SystemUiOverlayStyle>(
+    
+    Widget scaffoldContent = AnnotatedRegion<SystemUiOverlayStyle>(
       value: SystemUiOverlayStyle.dark,
       child: Scaffold(
       body: SizedBox.expand(
@@ -472,6 +474,21 @@ class _RegisterFormState extends State<RegisterForm> {
       ),
       ),
     );
+
+    // On web, center the content with max width constraint
+    if (kIsWeb) {
+      return Container(
+        color: Colors.white,
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 600),
+            child: scaffoldContent,
+          ),
+        ),
+      );
+    }
+
+    return scaffoldContent;
   }
 
   void _createAccount() async {
