@@ -1,5 +1,6 @@
 import 'package:chuchu/core/relayGroups/model/relayGroupDB_isar.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:qr_flutter/qr_flutter.dart';
@@ -7,6 +8,10 @@ import 'package:screenshot/screenshot.dart';
 import 'package:image_gallery_saver_plus/image_gallery_saver_plus.dart';
 import 'package:nostr_core_dart/src/nips/nip_019.dart';
 import 'package:share_plus/share_plus.dart';
+import 'dart:typed_data';
+import 'dart:convert';
+// Conditional import for web
+import 'dart:html' as html if (dart.library.io) 'package:chuchu/core/account/html_stub.dart';
 
 import '../../../core/account/account.dart';
 import '../../../core/account/account+profile.dart';
@@ -117,19 +122,51 @@ class _ShareProfilePageState extends State<ShareProfilePage> {
         return;
       }
 
-      final result = await ImageGallerySaverPlus.saveImage(
-        image,
-        quality: 100,
-        name: 'profile_${widget.pubkey.substring(0, 8)}',
-      );
-
-      if (result['isSuccess'] == true) {
-        CommonToast.instance.show(context, 'Image saved to gallery', toastType: ToastType.success);
+      if (kIsWeb) {
+        // Web: Use browser download
+        _downloadImageWeb(image);
       } else {
-        CommonToast.instance.show(context, 'Failed to save image', toastType: ToastType.failed);
+        // Mobile: Use ImageGallerySaverPlus
+        final result = await ImageGallerySaverPlus.saveImage(
+          image,
+          quality: 100,
+          name: 'profile_${widget.pubkey.substring(0, 8)}',
+        );
+
+        if (result['isSuccess'] == true) {
+          CommonToast.instance.show(context, 'Image saved to gallery', toastType: ToastType.success);
+        } else {
+          CommonToast.instance.show(context, 'Failed to save image', toastType: ToastType.failed);
+        }
       }
     } catch (e) {
       CommonToast.instance.show(context, 'Failed to save image', toastType: ToastType.failed);
+    }
+  }
+
+  void _downloadImageWeb(Uint8List imageBytes) {
+    try {
+      // Convert image bytes to base64
+      final base64Image = base64Encode(imageBytes);
+      
+      // Create a data URL
+      final dataUrl = 'data:image/png;base64,$base64Image';
+      
+      // Create an anchor element to trigger download
+      final anchor = html.AnchorElement(
+        href: dataUrl,
+      )
+        ..target = '_blank'
+        ..download = 'profile_${widget.pubkey.substring(0, 8)}.png';
+      
+      // Trigger download
+      html.document.body?.append(anchor);
+      anchor.click();
+      anchor.remove();
+      
+      CommonToast.instance.show(context, 'Image download started', toastType: ToastType.success);
+    } catch (e) {
+      CommonToast.instance.show(context, 'Failed to download image', toastType: ToastType.failed);
     }
   }
 
