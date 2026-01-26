@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:chuchu/core/utils/adapt.dart';
 import 'package:chuchu/core/utils/ui_refresh_mixin.dart';
 import '../../../core/theme/app_theme.dart';
@@ -74,14 +75,19 @@ class _ImageViewerPageState extends State<ImageViewerPage> with ChuChuUIRefreshM
 
   @override
   Widget buildBody(BuildContext context) {
+    // On web, use transparent background so barrierColor shows through
+    // On mobile, use semi-transparent black
+    final backgroundColor = kIsWeb ? Colors.transparent : Colors.black.withOpacity(0.5);
+    
     return Material(
-      color: Colors.black.withOpacity(0.5),
+      color: backgroundColor,
       child: Stack(
         children: [
           _buildMainImageViewer(),
           if (widget.images.length > 1) _buildImageCounter(),
           if (widget.images.length > 1) ..._buildNavigationArrows(),
-          _buildBottomGradientOverlay(),
+          // Only show bottom gradient overlay on mobile, not on web
+          if (!kIsWeb) _buildBottomGradientOverlay(),
         ],
       ),
     );
@@ -93,26 +99,58 @@ class _ImageViewerPageState extends State<ImageViewerPage> with ChuChuUIRefreshM
       onPageChanged: _onPageChanged,
       itemCount: widget.images.length,
       itemBuilder: (context, index) {
-        return GestureDetector(
-          onTap: () => Navigator.of(context).pop(),
-          child: Container(
-            width: double.infinity,
-            height: double.infinity,
-            child: InteractiveViewer(
-              minScale: 0.5,
-              maxScale: 3.0,
-              child: CachedNetworkImage(
-                imageUrl: widget.images[index],
-                fit: BoxFit.contain,
-                width: double.infinity,
-                height: double.infinity,
-                placeholder: (context, url) => _buildPlaceholder(),
-                errorWidget: (context, url, error) => _buildErrorWidget(),
-                // Bust thumbnail caches coming from list/grid by using a distinct cacheKey
-                cacheKey: '${widget.images[index]}#viewer_full',
-                filterQuality: FilterQuality.high,
+        return Container(
+          width: double.infinity,
+          height: double.infinity,
+          child: Stack(
+            children: [
+              // Clickable background to close
+              Positioned.fill(
+                child: GestureDetector(
+                  onTap: () => Navigator.of(context).pop(),
+                  child: Container(color: Colors.transparent),
+                ),
               ),
-            ),
+              // Image content
+              Center(
+                child: GestureDetector(
+                  onTap: () {}, // Prevent tap from propagating to background
+                  child: kIsWeb
+                      ? ConstrainedBox(
+                          constraints: BoxConstraints(
+                            maxWidth: 1200,
+                            maxHeight: double.infinity,
+                          ),
+                          child: InteractiveViewer(
+                            minScale: 0.5,
+                            maxScale: 3.0,
+                            child: CachedNetworkImage(
+                              imageUrl: widget.images[index],
+                              fit: BoxFit.contain,
+                              placeholder: (context, url) => _buildPlaceholder(),
+                              errorWidget: (context, url, error) => _buildErrorWidget(),
+                              cacheKey: '${widget.images[index]}#viewer_full',
+                              filterQuality: FilterQuality.high,
+                            ),
+                          ),
+                        )
+                      : InteractiveViewer(
+                          minScale: 0.5,
+                          maxScale: 3.0,
+                          child: CachedNetworkImage(
+                            imageUrl: widget.images[index],
+                            fit: BoxFit.contain,
+                            width: double.infinity,
+                            height: double.infinity,
+                            placeholder: (context, url) => _buildPlaceholder(),
+                            errorWidget: (context, url, error) => _buildErrorWidget(),
+                            cacheKey: '${widget.images[index]}#viewer_full',
+                            filterQuality: FilterQuality.high,
+                          ),
+                        ),
+                ),
+              ),
+            ],
           ),
         );
       },
@@ -269,23 +307,44 @@ void showImageViewer({
   required List<String> images,
   required int initialIndex,
 }) {
-  Navigator.of(context).push(
-    PageRouteBuilder(
-      opaque: false,
-      barrierColor: Colors.transparent,
+  if (kIsWeb) {
+    // On web, use showGeneralDialog to break out of width constraints
+    showGeneralDialog(
+      context: context,
+      barrierDismissible: true,
+      barrierLabel: 'Image Viewer',
+      barrierColor: Colors.black.withOpacity(0.7),
+      transitionDuration: Duration(milliseconds: 300),
       pageBuilder: (context, animation, secondaryAnimation) {
-        return ImageViewerPage(
-          images: images,
-          initialIndex: initialIndex,
-        );
-      },
-      transitionsBuilder: (context, animation, secondaryAnimation, child) {
         return FadeTransition(
           opacity: animation,
-          child: child,
+          child: ImageViewerPage(
+            images: images,
+            initialIndex: initialIndex,
+          ),
         );
       },
-      transitionDuration: Duration(milliseconds: 300),
-    ),
-  );
+    );
+  } else {
+    // On mobile, use Navigator.push
+    Navigator.of(context).push(
+      PageRouteBuilder(
+        opaque: false,
+        barrierColor: Colors.transparent,
+        pageBuilder: (context, animation, secondaryAnimation) {
+          return ImageViewerPage(
+            images: images,
+            initialIndex: initialIndex,
+          );
+        },
+        transitionsBuilder: (context, animation, secondaryAnimation, child) {
+          return FadeTransition(
+            opacity: animation,
+            child: child,
+          );
+        },
+        transitionDuration: Duration(milliseconds: 300),
+      ),
+    );
+  }
 } 
