@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'package:chuchu/core/account/account+nip07.dart';
 import 'package:chuchu/core/account/account+nip46.dart';
 import 'package:chuchu/core/account/account+profile.dart';
 import 'package:chuchu/core/account/relays.dart';
@@ -267,7 +268,12 @@ class Account {
       }
       return await loginWithPubKey(pubkey, SignerApplication.androidSigner, androidSignerKey: db.androidSignerKey);
     }
-    
+
+    // Check login type: nip07Signer (browser extension, web only)
+    if (db.privkey == 'nip07Signer') {
+      return await restoreNip07Session(pubkey);
+    }
+
     final storedPrivkey = await SecureAccountStorage.readPrivateKeyForPubkey(pubkey);
     if (storedPrivkey != null && storedPrivkey.isNotEmpty) {
       await SecureAccountStorage.savePrivateKey(

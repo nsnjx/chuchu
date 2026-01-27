@@ -8,7 +8,9 @@ import 'package:chuchu/core/utils/navigator/navigator.dart';
 import 'package:chuchu/presentation/home/pages/home_page.dart';
 import 'package:chuchu/presentation/login/pages/register_form.dart';
 import 'package:chuchu/core/account/account.dart';
+import 'package:chuchu/core/account/account+nip07.dart';
 import 'package:chuchu/core/account/account+nip46.dart';
+import 'package:chuchu/core/account/nip07.dart';
 import 'package:chuchu/core/manager/chuchu_user_info_manager.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../../core/widgets/chuchu_Loading.dart';
@@ -468,6 +470,127 @@ class _NewLoginPageState extends State<NewLoginPage> with ChuChuUIRefreshMixin {
     CommonToast.instance.show(context, 'Guest mode coming soon', toastType: ToastType.info);
   }
 
+  /// Call getPublicKey once; on "message channel closed" retry once after a short delay (nos2x timing).
+  Future<String> _getPublicKeyWithRetry() async {
+    try {
+      return await Nip07Bridge.getPublicKey();
+    } catch (e) {
+      final msg = e.toString().toLowerCase();
+      if (msg.contains('message channel closed') ||
+          msg.contains('asynchronous response') ||
+          msg.contains('listener indicated')) {
+        await Future<void>.delayed(const Duration(milliseconds: 500));
+        return await Nip07Bridge.getPublicKey();
+      }
+      rethrow;
+    }
+  }
+
+  void _setNip07ErrorMessage(dynamic e) {
+    final msg = e.toString().toLowerCase();
+    String displayMsg = 'Extension error: ${e.toString()}';
+    if (msg.contains('no private key found') || msg.contains('no private key')) {
+      displayMsg = 'No private key in the extension. Open nos2x/Alby, create or import a Nostr key, then try again.';
+    } else if (msg.contains('user rejected') || msg.contains('rejected') || msg.contains('cancelled')) {
+      displayMsg = 'Authorization was cancelled in the extension. Please try again.';
+    } else if (msg.contains('message channel closed') ||
+        msg.contains('asynchronous response') ||
+        msg.contains('listener indicated')) {
+      displayMsg = 'Extension timed out or did not respond. Click "Connect with Extension" again or refresh the page and try again.';
+    }
+    setState(() {
+      _isConnecting = false;
+      _hasError = true;
+      _errorMessage = displayMsg;
+    });
+  }
+
+  Future<void> _handleNip07Login() async {
+    if (!kIsWeb || !Nip07Bridge.isAvailable) {
+      setState(() {
+        _hasError = true;
+        _errorMessage = 'NIP-07 extension is not available. Install a Nostr extension (e.g. Alby, nos2x).';
+      });
+      return;
+    }
+    try {
+      setState(() {
+        _isConnecting = true;
+        _hasError = false;
+        _errorMessage = '';
+      });
+      ChuChuLoading.show();
+      // Get pubkey first and open DB before login – only call getPublicKey once to avoid "message channel closed" with nos2x
+      String pubkey;
+      try {
+        pubkey = await _getPublicKeyWithRetry();
+      } catch (e) {
+        ChuChuLoading.dismiss();
+        if (mounted) _setNip07ErrorMessage(e);
+        return;
+      }
+      if (pubkey.isEmpty) {
+        ChuChuLoading.dismiss();
+        if (mounted) {
+          setState(() {
+            _isConnecting = false;
+            _hasError = true;
+            _errorMessage = 'Failed to get public key from extension.';
+          });
+        }
+        return;
+      }
+      final ChuChuUserInfoManager instance = ChuChuUserInfoManager.sharedInstance;
+      final currentUserPubKey = instance.currentUserInfo?.pubKey ?? '';
+      await instance.initDB(pubkey);
+      final userDB = await Account.sharedInstance.loginWithNip07Pubkey(pubkey);
+      if (userDB == null) {
+        setState(() {
+          _isConnecting = false;
+          _hasError = true;
+          _errorMessage = 'Failed to connect with extension. Please try again or approve in the extension.';
+        });
+        ChuChuLoading.dismiss();
+        return;
+      }
+      var finalUserDB = await instance.handleSwitchFailures(userDB, currentUserPubKey);
+      if (finalUserDB == null) {
+        setState(() {
+          _isConnecting = false;
+          _hasError = true;
+          _errorMessage = 'Login failed. Please try again.';
+        });
+        ChuChuLoading.dismiss();
+        return;
+      }
+      ChuChuUserInfoManager.sharedInstance.loginSuccess(finalUserDB);
+      ChuChuLoading.dismiss();
+      if (mounted) ChuChuNavigator.pushReplacement(context, const HomePage());
+    } catch (e) {
+      ChuChuLoading.dismiss();
+      if (mounted) {
+        final msg = e.toString().toLowerCase();
+        String displayMsg = 'Extension error: ${e.toString()}';
+        if (msg.contains('no private key found') || msg.contains('no private key')) {
+          displayMsg = 'No private key in the extension. Open nos2x/Alby, create or import a Nostr key, then try again.';
+        } else if (msg.contains('user rejected') || msg.contains('rejected') || msg.contains('cancelled')) {
+          displayMsg = 'Authorization was cancelled in the extension. Please try again.';
+        } else if (msg.contains('database is not open') || msg.contains('call open() first')) {
+          displayMsg = 'Internal error: database not ready. Please refresh the page and try again.';
+        } else if (msg.contains('message channel closed') ||
+            msg.contains('asynchronous response') ||
+            msg.contains('listener indicated')) {
+          displayMsg = 'Extension timed out or did not respond. Click "Connect with Extension" again or refresh the page and try again.';
+        }
+        setState(() {
+          _isConnecting = false;
+          _hasError = true;
+          _errorMessage = displayMsg;
+        });
+      }
+    }
+  }
+
   @override
   Widget buildBody(BuildContext context) {
     final screenSize = MediaQuery.of(context).size;
@@ -643,6 +766,33 @@ class _NewLoginPageState extends State<NewLoginPage> with ChuChuUIRefreshMixin {
                                                 color: Colors.redAccent,
                                               ),
                                             ),
+                                          ],
+
+                                          if (kIsWeb && Nip07Bridge.isAvailable) ...[
+                                            const SizedBox(height: 16),
+                                            SizedBox(
+                                              width: double.infinity,
+                                              height: 48,
+                                              child: OutlinedButton.icon(
+                                                onPressed: _isConnecting ? null : _handleNip07Login,
+                                                icon: const Icon(Icons.extension, size: 20),
+                                                label: Text(
+                                                  'Connect with Extension',
+                                                  style: GoogleFonts.inter(
+                                                    fontSize: 14,
+                                                    fontWeight: FontWeight.w600,
+                                                  ),
+                                                ),
+                                                style: OutlinedButton.styleFrom(
+                                                  foregroundColor: kPrimary,
+                                                  side: BorderSide(color: kPrimary.withOpacity(0.6)),
+                                                  shape: RoundedRectangleBorder(
+                                                    borderRadius: BorderRadius.circular(24),
+                                                  ),
+                                                ),
+                                              ),
+                                            ),
+                                            const SizedBox(height: 16),
                                           ],
 
                                           const SizedBox(height: 24),
