@@ -1,6 +1,8 @@
 import 'package:chuchu/core/account/account+relay.dart';
+import 'package:chuchu/core/account/nip07.dart';
 import 'package:chuchu/core/manager/thread_pool_manager.dart';
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import '../config/storage_key_tool.dart';
 import '../feed/model/noteDB_isar.dart';
@@ -110,28 +112,51 @@ class ChuChuUserInfoManager {
       }
     }
 
-    /// Legacy auto-login based on cached pubkey
-    final String? localPubKey = await ChuChuCacheManager
+    /// Legacy auto-login based on cached pubkey (covers nsec + NIP-07)
+    String? localPubKey = await ChuChuCacheManager
         .defaultOXCacheManager
         .getForeverData(StorageKeyTool.CHUCHU_USER_PUBKEY);
+    // NIP-07: on web, getForeverData may not persist; use SecureAccountStorage as fallback (same origin as nsec).
+    if ((localPubKey == null || localPubKey.isEmpty) && kIsWeb) {
+      localPubKey = await SecureAccountStorage.readNip07Pubkey();
+    }
     if (localPubKey != null && localPubKey.isNotEmpty) {
-        await initDB(localPubKey);
-        final UserDBISAR? tempUserDB = await Account.sharedInstance.loginWithPubKeyAndPassword(localPubKey);
-        if (tempUserDB != null) {
-          currentUserInfo = tempUserDB;
-          RelayGroup.sharedInstance.syncKeysFromAccount();
-          _initDatas();
-          return;
+      await initDB(localPubKey);
+      UserDBISAR? tempUserDB =
+          await Account.sharedInstance.loginWithPubKeyAndPassword(localPubKey);
+      // NIP-07: extension often injects after page load; poll until available then retry.
+      if (tempUserDB == null && kIsWeb) {
+        const interval = Duration(milliseconds: 400);
+        const maxWait = Duration(seconds: 4);
+        final deadline = DateTime.now().add(maxWait);
+        while (DateTime.now().isBefore(deadline)) {
+          await Future<void>.delayed(interval);
+          if (Nip07Bridge.isAvailable) {
+            tempUserDB = await Account.sharedInstance
+                .loginWithPubKeyAndPassword(localPubKey);
+            if (tempUserDB != null) break;
+          }
         }
+      }
+      if (tempUserDB != null) {
+        currentUserInfo = tempUserDB;
+        RelayGroup.sharedInstance.syncKeysFromAccount();
+        _initDatas();
+        return;
+      }
     }
   }
 
   Future<void> loginSuccess(UserDBISAR userDB, {bool isAmber = false}) async {
     currentUserInfo = Account.sharedInstance.me;
-    ChuChuCacheManager.defaultOXCacheManager.saveForeverData(
+    await ChuChuCacheManager.defaultOXCacheManager.saveForeverData(
       StorageKeyTool.CHUCHU_USER_PUBKEY,
       userDB.pubKey,
     );
+    // NIP-07: persist pubkey in SecureAccountStorage (same as nsec) so it survives web refresh.
+    if (userDB.privkey == 'nip07Signer') {
+      await SecureAccountStorage.saveNip07Pubkey(userDB.pubKey);
+    }
     // Sync RelayGroup keys immediately so sends (e.g. NIP-07 reply) use current account
     // before _initDatas() completes and RelayGroup.init() runs.
     RelayGroup.sharedInstance.syncKeysFromAccount();
@@ -185,6 +210,9 @@ class ChuChuUserInfoManager {
   Future logout({bool needObserver = true}) async {
     if (ChuChuUserInfoManager.sharedInstance.currentUserInfo == null) {
       return;
+    }
+    if (currentUserInfo?.privkey == 'nip07Signer') {
+      await SecureAccountStorage.clearNip07Pubkey();
     }
     await Account.sharedInstance.logout();
     await SecureAccountStorage.clearPrivateKey();

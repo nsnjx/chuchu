@@ -20,6 +20,7 @@ import '../wallet/wallet.dart';
 import '../relayGroups/model/relayGroupDB_isar.dart';
 import '../bookmark/bookmark_manager.dart';
 import 'model/userDB_isar.dart';
+import 'nip07.dart' show Nip07Bridge;
 import 'secure_account_storage.dart';
 
 
@@ -250,9 +251,39 @@ class Account {
     return userDB;
   }
 
+  /// Normalize pubkey to 64-char hex (lowercase). Handles hex or npub.
+  static String? _normalizePubkeyToHex(String s) {
+    s = s.trim();
+    if (s.isEmpty) return null;
+    if (RegExp(r'^[a-fA-F0-9]{64}$').hasMatch(s)) return s.toLowerCase();
+    try {
+      return Nip19.decodePubkey(s);
+    } catch (_) {
+      return null;
+    }
+  }
+
   Future<UserDBISAR?> loginWithPubKeyAndPassword(String pubkey) async {
     UserDBISAR? db = await _searchUserFromDB(pubkey);
-    if (db == null) return null;
+    if (db == null) {
+      // NIP-07 auto-login: when DB has no user row (e.g. IndexedDB cleared but getForeverData still has pubkey),
+      // if extension is available and its pubkey matches cached pubkey, create NIP-07 user row and restore session.
+      if (kIsWeb && Nip07Bridge.isAvailable) {
+        try {
+          final extPubkey = await Nip07Bridge.getPublicKey();
+          final hexCached = _normalizePubkeyToHex(pubkey);
+          final hexExt = _normalizePubkeyToHex(extPubkey);
+          if (hexCached != null && hexExt != null && hexCached == hexExt) {
+            final nip07User = UserDBISAR(pubKey: hexCached);
+            nip07User.privkey = 'nip07Signer';
+            nip07User.name = nip07User.shortEncodedPubkey;
+            await saveUserToDB(nip07User);
+            return await restoreNip07Session(hexCached);
+          }
+        } catch (_) {}
+      }
+      return null;
+    }
     
     // Check login type: bunker/remoteSigner
     if (db.remoteSignerURI != null) {
@@ -281,6 +312,19 @@ class Account {
         pubkey: pubkey,
       );
       return await loginWithPriKey(storedPrivkey);
+    }
+    // DB has user row but privkey is not nip07Signer (empty or legacy); no local privkey: verify with extension, treat as NIP-07 and restore if match.
+    if (kIsWeb && Nip07Bridge.isAvailable) {
+      try {
+        final extPubkey = await Nip07Bridge.getPublicKey();
+        final hexCached = _normalizePubkeyToHex(pubkey);
+        final hexExt = _normalizePubkeyToHex(extPubkey);
+        if (hexCached != null && hexExt != null && hexCached == hexExt) {
+          db.privkey = 'nip07Signer';
+          await saveUserToDB(db);
+          return await restoreNip07Session(hexCached);
+        }
+      } catch (_) {}
     }
     return null;
   }

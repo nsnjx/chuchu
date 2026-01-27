@@ -9,6 +9,7 @@ class SecureAccountStorage {
 
   static const String _privkeyKey = 'chuchu_user_privkey';
   static const String _privkeyMapKey = 'chuchu_user_privkey_map';
+  static const String _nip07PubkeyKey = 'chuchu_nip07_pubkey';
 
   static const FlutterSecureStorage _storage = FlutterSecureStorage();
 
@@ -77,6 +78,58 @@ class SecureAccountStorage {
       );
     } catch (e) {
       debugPrint('[SecureAccountStorage] failed to clear privkey: $e');
+    }
+  }
+
+  /// NIP-07 auto-login: persist pubkey in SecureAccountStorage (same as nsec) so it survives web refresh.
+  static Future<void> saveNip07Pubkey(String pubkey) async {
+    if (pubkey.isEmpty) return;
+    try {
+      await _storage.write(
+        key: _nip07PubkeyKey,
+        value: pubkey,
+        aOptions: _androidOptions,
+        iOptions: _iosOptions,
+        mOptions: _macOptions,
+        lOptions: _linuxOptions,
+        wOptions: _windowsOptions,
+        webOptions: _webOptions,
+      );
+    } catch (e) {
+      debugPrint('[SecureAccountStorage] failed to save NIP-07 pubkey: $e');
+    }
+  }
+
+  static Future<String?> readNip07Pubkey() async {
+    try {
+      return await _storage.read(
+        key: _nip07PubkeyKey,
+        aOptions: _androidOptions,
+        iOptions: _iosOptions,
+        mOptions: _macOptions,
+        lOptions: _linuxOptions,
+        wOptions: _windowsOptions,
+        webOptions: _webOptions,
+      );
+    } catch (e) {
+      debugPrint('[SecureAccountStorage] failed to read NIP-07 pubkey: $e');
+      return null;
+    }
+  }
+
+  static Future<void> clearNip07Pubkey() async {
+    try {
+      await _storage.delete(
+        key: _nip07PubkeyKey,
+        aOptions: _androidOptions,
+        iOptions: _iosOptions,
+        mOptions: _macOptions,
+        lOptions: _linuxOptions,
+        wOptions: _windowsOptions,
+        webOptions: _webOptions,
+      );
+    } catch (e) {
+      debugPrint('[SecureAccountStorage] failed to clear NIP-07 pubkey: $e');
     }
   }
 
