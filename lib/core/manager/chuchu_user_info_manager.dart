@@ -101,6 +101,7 @@ class ChuChuUserInfoManager {
             storedPrivkey,
             pubkey: storedPubkey,
           );
+          RelayGroup.sharedInstance.syncKeysFromAccount();
           _initDatas();
           return;
         }
@@ -118,6 +119,7 @@ class ChuChuUserInfoManager {
         final UserDBISAR? tempUserDB = await Account.sharedInstance.loginWithPubKeyAndPassword(localPubKey);
         if (tempUserDB != null) {
           currentUserInfo = tempUserDB;
+          RelayGroup.sharedInstance.syncKeysFromAccount();
           _initDatas();
           return;
         }
@@ -130,6 +132,9 @@ class ChuChuUserInfoManager {
       StorageKeyTool.CHUCHU_USER_PUBKEY,
       userDB.pubKey,
     );
+    // Sync RelayGroup keys immediately so sends (e.g. NIP-07 reply) use current account
+    // before _initDatas() completes and RelayGroup.init() runs.
+    RelayGroup.sharedInstance.syncKeysFromAccount();
 
     await _initDatas();
     for (ChuChuUserInfoObserver observer in _observers) {

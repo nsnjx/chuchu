@@ -98,6 +98,13 @@ class RelayGroup {
     isReady.value = true;
   }
 
+  /// Sync pubkey/privkey from current Account. Call from upper layer when account
+  /// has changed (e.g. after login/switch) so sends use the right keys before init() runs.
+  void syncKeysFromAccount() {
+    pubkey = Account.sharedInstance.currentPubkey;
+    privkey = Account.sharedInstance.currentPrivkey;
+  }
+
   /// 0, not in the group, 1, in the group & not joined, 2. joined
   int getInGroupStatus(String groupId) {
     SimpleGroups simpleGroups = getHostAndGroupId(groupId);
