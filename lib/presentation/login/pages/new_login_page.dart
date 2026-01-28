@@ -506,11 +506,26 @@ class _NewLoginPageState extends State<NewLoginPage> with ChuChuUIRefreshMixin {
   }
 
   Future<void> _handleNip07Login() async {
-    if (!kIsWeb || !Nip07Bridge.isAvailable) {
-      setState(() {
-        _hasError = true;
-        _errorMessage = 'NIP-07 extension is not available. Install a Nostr extension (e.g. Alby, nos2x).';
-      });
+    if (!kIsWeb) return;
+    if (!Nip07Bridge.isAvailable) {
+      if (!mounted) return;
+      await showDialog<void>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Extension required'),
+          content: const Text(
+            'No Nostr extension was detected. Please install a browser extension such as Alby or nos2x to connect with your key.\n\n'
+            '• Alby: getalby.com\n'
+            '• nos2x: Chrome Web Store / Firefox Add-ons',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('OK'),
+            ),
+          ],
+        ),
+      );
       return;
     }
     try {
@@ -768,8 +783,8 @@ class _NewLoginPageState extends State<NewLoginPage> with ChuChuUIRefreshMixin {
                                             ),
                                           ],
 
-                                          if (kIsWeb && Nip07Bridge.isAvailable) ...[
-                                            const SizedBox(height: 16),
+                                          if (kIsWeb) ...[
+                                            const SizedBox(height: 10),
                                             SizedBox(
                                               width: double.infinity,
                                               height: 48,
@@ -792,10 +807,9 @@ class _NewLoginPageState extends State<NewLoginPage> with ChuChuUIRefreshMixin {
                                                 ),
                                               ),
                                             ),
-                                            const SizedBox(height: 16),
+                                            const SizedBox(height: 8),
                                           ],
-
-                                          const SizedBox(height: 24),
+                                          const SizedBox(height: 8),
 
                                           // Create Account button
                                           _buildCreateAccountButton(),
