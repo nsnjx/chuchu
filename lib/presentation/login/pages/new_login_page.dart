@@ -496,7 +496,7 @@ class _NewLoginPageState extends State<NewLoginPage> with ChuChuUIRefreshMixin {
     } else if (msg.contains('message channel closed') ||
         msg.contains('asynchronous response') ||
         msg.contains('listener indicated')) {
-      displayMsg = 'Extension timed out or did not respond. Click "Connect with Extension" again or refresh the page and try again.';
+      displayMsg = 'Extension timed out or did not respond. Click "Connect with Nostr Extension" again or refresh the page and try again.';
     }
     setState(() {
       _isConnecting = false;
@@ -595,7 +595,7 @@ class _NewLoginPageState extends State<NewLoginPage> with ChuChuUIRefreshMixin {
         } else if (msg.contains('message channel closed') ||
             msg.contains('asynchronous response') ||
             msg.contains('listener indicated')) {
-          displayMsg = 'Extension timed out or did not respond. Click "Connect with Extension" again or refresh the page and try again.';
+          displayMsg = 'Extension timed out or did not respond. Click "Connect with Nostr Extension" again or refresh the page and try again.';
         }
         setState(() {
           _isConnecting = false;
@@ -792,7 +792,7 @@ class _NewLoginPageState extends State<NewLoginPage> with ChuChuUIRefreshMixin {
                                                 onPressed: _isConnecting ? null : _handleNip07Login,
                                                 icon: const Icon(Icons.extension, size: 20),
                                                 label: Text(
-                                                  'Connect with Extension',
+                                                  'Connect with Nostr Extension',
                                                   style: GoogleFonts.inter(
                                                     fontSize: 14,
                                                     fontWeight: FontWeight.w600,
