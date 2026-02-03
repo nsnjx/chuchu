@@ -10,6 +10,7 @@ import '../account/zaps.dart';
 import '../contacts/contacts.dart';
 import '../database/db_isar.dart';
 import '../messages/messages.dart';
+import '../config/config.dart';
 import '../network/connect.dart';
 import '../network/eventCache.dart';
 import '../relayGroups/relayGroup.dart';
@@ -281,9 +282,13 @@ extension Load on Feed {
     String noteId = noteDB.noteId;
     Completer<NoteDBISAR> completer = Completer<NoteDBISAR>();
 
+    // Only use relayGroup (chuchu.app) so notes/replies saved to DB are from chuchu.app
+    final noteRelays = Connect.sharedInstance.relays(relayKinds: [RelayKind.relayGroup]).isNotEmpty
+        ? Connect.sharedInstance.relays(relayKinds: [RelayKind.relayGroup])
+        : Config.sharedInstance.recommendGroupRelays;
     Map<String, Event> result = {};
     Map<String, List<Filter>> subscriptions = {};
-    for (String relayURL in Connect.sharedInstance.relays()) {
+    for (String relayURL in noteRelays) {
       int lastUpdatedTime = noteDB.getLastUpdatedTime(relayURL);
       Filter f = lastUpdatedTime == 0
           ? Filter(kinds: [1, 6, 7, 9735], e: [noteId])
@@ -464,7 +469,12 @@ extension Load on Feed {
     authors ??= [pubkey];
     Filter f = Filter(kinds: [1], authors: authors, limit: limit, until: until, since: since);
     Map<String, Event> result = {};
-    Connect.sharedInstance.addSubscription([f], eventCallBack: (event, relay) async {
+    // Only use relayGroup (chuchu.app) so notes saved to DB are from chuchu.app
+    final noteRelays = Connect.sharedInstance.relays(relayKinds: [RelayKind.relayGroup]).isNotEmpty
+        ? Connect.sharedInstance.relays(relayKinds: [RelayKind.relayGroup])
+        : Config.sharedInstance.recommendGroupRelays;
+    Connect.sharedInstance.addSubscription([f], relays: noteRelays, relayKind: RelayKind.relayGroup,
+        eventCallBack: (event, relay) async {
       result[event.id] = event;
     }, eoseCallBack: (requestId, ok, relay, unRelays) async {
       if (unRelays.isEmpty) {
@@ -504,7 +514,12 @@ extension Load on Feed {
     Completer<List<NoteDBISAR>?> completer = Completer<List<NoteDBISAR>?>();
     Filter f = Filter(kinds: [1], t: hashTags, until: until, limit: limit);
     Map<String, Event> result = {};
-    Connect.sharedInstance.addSubscription([f], eventCallBack: (event, relay) async {
+    // Only use relayGroup (chuchu.app) so notes saved to DB are from chuchu.app
+    final noteRelays = Connect.sharedInstance.relays(relayKinds: [RelayKind.relayGroup]).isNotEmpty
+        ? Connect.sharedInstance.relays(relayKinds: [RelayKind.relayGroup])
+        : Config.sharedInstance.recommendGroupRelays;
+    Connect.sharedInstance.addSubscription([f], relays: noteRelays, relayKind: RelayKind.relayGroup,
+        eventCallBack: (event, relay) async {
       result[event.id] = event;
     }, eoseCallBack: (requestId, ok, relay, unRelays) async {
       if (unRelays.isEmpty) {
