@@ -11,6 +11,9 @@ import '../proxy/proxy_settings.dart';
 import '../utils/log_utils.dart';
 import 'eventCache.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
+
+import 'web_page_context_stub.dart' if (dart.library.html) 'web_page_context_web.dart' as web_page_context;
 
 /// notice callback
 typedef NoticeCallBack = void Function(String notice, String relay);
@@ -215,6 +218,8 @@ class Connect {
   Future<void> connect(String relay, {RelayKind relayKind = RelayKind.general}) async {
     LogUtils.v(() => 'connect to $relay, kind: ${relayKind.name}');
     if (relay.isEmpty) return;
+    // On Web over HTTPS, browser blocks ws:// (Mixed Content); skip to avoid console error. HTTP (e.g. localhost) allows ws://.
+    if (kIsWeb && web_page_context.isWebPageHttps && relay.startsWith('ws://')) return;
 
     List<RelayKind> relayKinds = webSockets[relay]?.relayKinds ?? [relayKind];
     if (!relayKinds.contains(relayKind)) {
