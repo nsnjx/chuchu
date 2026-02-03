@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 import 'package:chuchu/core/account/relays.dart';
+import 'package:chuchu/core/config/config.dart';
 import 'package:chuchu/core/contacts/contacts+blocklist.dart';
 import 'package:chuchu/core/feed/feed+load.dart';
 import 'package:chuchu/core/feed/feed+notification.dart';
@@ -146,15 +147,17 @@ class Zaps {
         eventCallBack: (event, relay) async {
       updateZapRecordTime(event.createdAt, relay);
       if (Contacts.sharedInstance.inBlockList(event.pubkey)) return;
+      // Only forward kind 1/6/7 to Feed when relay is group relay (chuchu.app); avoid saving general-relay notes to feed DB.
+      final isGroupRelay = Config.sharedInstance.recommendGroupRelays.contains(relay);
       switch (event.kind) {
         case 1:
-          Feed.sharedInstance.handleNoteEvent(event, relay, false);
+          if (isGroupRelay) Feed.sharedInstance.handleNoteEvent(event, relay, false);
           break;
         case 6:
-          Feed.sharedInstance.handleRepostsEvent(event, relay, false);
+          if (isGroupRelay) Feed.sharedInstance.handleRepostsEvent(event, relay, false);
           break;
         case 7:
-          Feed.sharedInstance.handleReactionEvent(event, relay, false);
+          if (isGroupRelay) Feed.sharedInstance.handleReactionEvent(event, relay, false);
           break;
         case 9735:
           Zaps.handleZapRecordEvent(event);
