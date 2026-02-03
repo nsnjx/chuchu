@@ -194,9 +194,7 @@ class RelayGroup {
           loadGroupMessages(groupId, null, null, 200);
         }
         result[groupId] = groups[groupId]!;
-        if (!groupRelays.contains(groups[groupId]!.value.relay)) {
-          groupRelays.add(groups[groupId]!.value.relay);
-        }
+        // Use only recommendGroupRelays (e.g. wss://relay.chuchu.app) for note subscription; do not add each group's relay.
       }
       connectToRelays(groupRelays);
     }
@@ -211,14 +209,9 @@ class RelayGroup {
           result[groupId] = notifier;
         }
       });
-      // If we added groups, ensure we are connected to their relays
+      // Use only recommendGroupRelays for subscription
       if (result.isNotEmpty) {
         groupRelays = Config.sharedInstance.recommendGroupRelays;
-        result.values.forEach((n) {
-          if (!groupRelays.contains(n.value.relay)) {
-            groupRelays.add(n.value.relay);
-          }
-        });
         connectToRelays(groupRelays);
       }
     }

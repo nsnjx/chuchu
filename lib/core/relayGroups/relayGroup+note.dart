@@ -248,7 +248,12 @@ extension ENote on RelayGroup {
 
   Future<void> fetchGroupNotesFromRelays(RelayGroupDBISAR group,
       {int limit = 50, int? until}) async {
-    final relayUrl = group.relay.isNotEmpty ? group.relay : Config.sharedInstance.recommendGroupRelays.first;
+    // Fetch notes only from recommendGroupRelays (e.g. wss://relay.chuchu.app)
+    final relayUrl = Config.sharedInstance.recommendGroupRelays.isNotEmpty
+        ? Config.sharedInstance.recommendGroupRelays.first
+        : group.relay.isNotEmpty
+            ? group.relay
+            : 'wss://relay.chuchu.app';
     final filter = Filter(
       h: [group.groupId],
       kinds: const [
