@@ -4,6 +4,7 @@ import 'package:chuchu/core/feed/feed+load.dart';
 import 'package:flutter/foundation.dart';
 
 import '../account/account.dart';
+import '../config/config.dart';
 import '../account/model/relayDB_isar.dart';
 import '../account/relays.dart';
 import '../contacts/contacts.dart';
@@ -48,9 +49,10 @@ class Feed {
     pubkey = Account.sharedInstance.currentPubkey;
     
     Connect.sharedInstance.addConnectStatusListener((relay, status, relayKinds) async {
-      if (status == 1 && 
-          Account.sharedInstance.me != null && 
-          relayKinds.contains(RelayKind.general) &&
+      // Note subscription only on relayGroup (e.g. wss://relay.chuchu.app), all platforms
+      if (status == 1 &&
+          Account.sharedInstance.me != null &&
+          relayKinds.contains(RelayKind.relayGroup) &&
           ChuChuUserInfoManager.sharedInstance.isLogin) {
         updateSubscriptions(relay: relay);
       }
@@ -77,7 +79,11 @@ class Feed {
     if (authors.isNotEmpty) {
       Map<String, List<Filter>> subscriptions = {};
       if (relay == null) {
-        for (String relayURL in Connect.sharedInstance.relays()) {
+        // Pull notes only from relayGroup (e.g. wss://relay.chuchu.app), all platforms
+        final noteRelays = Connect.sharedInstance.relays(relayKinds: [RelayKind.relayGroup]).isNotEmpty
+            ? Connect.sharedInstance.relays(relayKinds: [RelayKind.relayGroup])
+            : Config.sharedInstance.recommendGroupRelays;
+        for (String relayURL in noteRelays) {
           int momentUntil = Relays.sharedInstance.getMomentUntil(relayURL);
           Filter f1 = Filter(
               authors: authors,

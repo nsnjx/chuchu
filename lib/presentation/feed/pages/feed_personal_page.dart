@@ -438,6 +438,7 @@ class _FeedPersonalPageState extends State<FeedPersonalPage>
     }
   }
 
+  /// Fetches notes from relay. Uses only recommendGroupRelays (e.g. wss://relay.chuchu.app).
   Future<void> _fetchNotesFromRelay({required bool isInitial}) async {
     if (_isFetchingRemoteNotes) return;
     _isFetchingRemoteNotes = true;
@@ -448,6 +449,7 @@ class _FeedPersonalPageState extends State<FeedPersonalPage>
               .groups[widget.relayGroupDB.groupId]
               ?.value ??
           widget.relayGroupDB;
+      // fetchGroupNotesFromRelays uses only Config.recommendGroupRelays (chuchu.app)
       await RelayGroup.sharedInstance.fetchGroupNotesFromRelays(
         group,
         limit: _limit,
