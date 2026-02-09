@@ -28,28 +28,24 @@ class Relays {
     if (result.isNotEmpty) {
       relays = {for (var item in result) item.url: item};
     }
-    connectGeneralRelays();
+    await connectGeneralRelays();
     // connectDMRelays();
     // connectInboxOutboxRelays();
   }
 
   Future<void> connectGeneralRelays() async {
+    // Only connect to config relays: purplepag.es (profile) + chuchu.app (group). Do not use user relayList.
     List<String> connectedGeneralRelays =
         Connect.sharedInstance.relays(relayKinds: [RelayKind.general]);
-    List<String> generalRelays = Account.sharedInstance.me?.relayList ?? [];
-    List<String> notInGeneralRelays =
-        connectedGeneralRelays.where((relay) => !generalRelays.contains(relay)).toList();
-    await Connect.sharedInstance.closeConnects(notInGeneralRelays, RelayKind.general);
+    List<String> allowedGeneral = Config.sharedInstance.recommendGeneralRelays;
+    List<String> notInAllowed =
+        connectedGeneralRelays.where((r) => !allowedGeneral.contains(r)).toList();
+    await Connect.sharedInstance.closeConnects(notInAllowed, RelayKind.general);
 
-    int updatedTime = Account.sharedInstance.me?.lastRelayListUpdatedTime ?? 0;
-    if (updatedTime > 0 && generalRelays.isNotEmpty) {
-      Connect.sharedInstance.connectRelays(generalRelays, relayKind: RelayKind.general);
-    }
-    else {
-      // startup relays
-      Connect.sharedInstance.connectRelays(Config.sharedInstance.recommendGeneralRelays, relayKind: RelayKind.general);
-    }
-    Connect.sharedInstance.connectRelays(Config.sharedInstance.recommendGroupRelays, relayKind: RelayKind.relayGroup);
+    // Wait for profile relay(s) to connect so nickname/profile update works immediately
+    await Connect.sharedInstance.connectRelays(allowedGeneral, relayKind: RelayKind.general);
+    // Then connect group relay
+    await Connect.sharedInstance.connectRelays(Config.sharedInstance.recommendGroupRelays, relayKind: RelayKind.relayGroup);
   }
 
   Future<void> connectDMRelays() async {

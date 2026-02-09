@@ -15,11 +15,9 @@ class Config {
 
   ProxySettings? proxySettings;
 
-  // recommend relays config
+  // recommend relays config: only chuchu.app + profile relay (damus)
   List<String> recommendGeneralRelays = [
     'wss://relay.damus.io',
-    'wss://relay.nostr.band',
-    'wss://relay.0xchat.com'
   ];
 
   List<String> recommendGroupRelays = [

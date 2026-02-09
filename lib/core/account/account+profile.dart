@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
-import 'package:chuchu/core/account/relays.dart';
 import 'package:flutter/foundation.dart';
+import '../config/config.dart';
 import '../contacts/contacts.dart';
 import '../network/connect.dart';
 import 'package:nostr_core_dart/nostr.dart';
@@ -204,7 +204,11 @@ extension AccountProfile on Account {
 
     Event event = await Nip1.setMetadata(contentJson, currentPubkey, currentPrivkey);
 
-    Connect.sharedInstance.sendEvent(event, sendCallBack: (ok, relay) {
+    // Send profile (kind 0) to config profile relay (e.g. damus)
+    final profileRelays = Config.sharedInstance.recommendGeneralRelays;
+    Connect.sharedInstance.sendEvent(event,
+        toRelays: profileRelays.isNotEmpty ? profileRelays : null,
+        sendCallBack: (ok, relay) {
       if (ok.status) {
         completer.complete(db);
       } else {
@@ -328,7 +332,7 @@ extension AccountProfile on Account {
         }
       }
       if (db.pubKey == currentPubkey) {
-        Relays.sharedInstance.connectInboxOutboxRelays();
+        // Only chuchu.app + purplepag.es are connected; do not connect user inbox/outbox.
         relayListUpdateCallback?.call();
       }
     }
@@ -367,7 +371,7 @@ extension AccountProfile on Account {
       db.lastDMRelayListUpdatedTime = event.createdAt;
       List<String> relayList = Nip17.decodeDMRelays(event);
       db.dmRelayList = relayList;
-      Relays.sharedInstance.connectDMRelays();
+      // Only chuchu.app + purplepag.es are connected; do not connect user dm relay list.
       if (db.pubKey == currentPubkey) dmRelayListUpdateCallback?.call();
     }
     return db;
