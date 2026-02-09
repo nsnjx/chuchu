@@ -60,13 +60,15 @@ class GradientButton extends StatelessWidget {
     final bool hasFixedSize = width != null || height != null;
 
     Widget content = isLoading
-        ? SizedBox(
-            width: 20,
-            height: 20,
-            child: CircularProgressIndicator(
-              strokeWidth: 2,
-              valueColor: AlwaysStoppedAnimation<Color>(
-                _isEnabled ? Colors.white : theme.colorScheme.onSurface.withOpacity(0.5),
+        ? Center(
+            child: SizedBox(
+              width: 24,
+              height: 24,
+              child: CircularProgressIndicator(
+                strokeWidth: 2.5,
+                valueColor: AlwaysStoppedAnimation<Color>(
+                  _isEnabled ? Colors.white : theme.colorScheme.onSurface.withOpacity(0.5),
+                ),
               ),
             ),
           )
