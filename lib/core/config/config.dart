@@ -17,7 +17,8 @@ class Config {
 
   // recommend relays config: only chuchu.app + profile relay (damus)
   List<String> recommendGeneralRelays = [
-    'wss://relay.damus.io',
+    // 'wss://relay.damus.io',、
+    'wss://profiles.nostr1.com'
   ];
 
   List<String> recommendGroupRelays = [
