@@ -608,6 +608,12 @@ class DBISAR {
     });
   }
 
+  /// Flush all buffered writes immediately (e.g. so Web IndexedDB persists before other code can overwrite in-memory state).
+  Future<void> flushBuffers() async {
+    _timer?.cancel();
+    await _putAll();
+  }
+
   Future<void> _putAll() async {
     _timer?.cancel();
     _timer = null;

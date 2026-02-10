@@ -103,9 +103,10 @@ class _FeedPageState extends State<FeedPage>
       _tryInitializeNotes();
     };
 
-    // Listen to RelayGroup ready state
+    // Listen to RelayGroup ready state (e.g. after _loadAllGroupsFromDB; refresh stories from myGroups/Web fallback)
     _relayReadyListener = () {
       if (RelayGroup.sharedInstance.isReady.value) {
+        _loadSubscriptionList();
         _tryInitializeNotes();
       }
     };

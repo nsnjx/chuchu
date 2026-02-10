@@ -51,9 +51,11 @@ extension EMember on RelayGroup {
             subscriptionAmount: subscriptionAmount,
             groupWalletId: groupWalletId,
             lastUpdatedTime: event.createdAt);
-        myGroups[groupId] = ValueNotifier(relayGroupDB) ;
+        myGroups[groupId] = ValueNotifier(relayGroupDB);
+        applyMyGroupListToMe();
         await syncGroupToDB(relayGroupDB);
         await editMetadata(groupId, name, about, picture, closed, closed, '', subscriptionAmount: subscriptionAmount, groupWalletId: groupWalletId);
+        await syncMyGroupListToDB();
         syncMyGroupListToRelay();
         if (!completer.isCompleted) completer.complete(relayGroupDB);
       } else {
@@ -97,8 +99,10 @@ extension EMember on RelayGroup {
               about: about,
               lastUpdatedTime: currentUnixTimestampSeconds());
           myGroups[groupId] = ValueNotifier(relayGroupDB);
+          applyMyGroupListToMe();
           await syncGroupToDB(relayGroupDB);
           await editMetadata(groupId, name, about, picture, closed, closed, '', subscriptionAmount: subscriptionAmount, groupWalletId: groupWalletId);
+          await syncMyGroupListToDB();
           syncMyGroupListToRelay();
           if (!completer.isCompleted) completer.complete(relayGroupDB);
         } else {

@@ -155,6 +155,14 @@ class RelayGroup {
       }
     }
     myGroups = _myGroups();
+    final me = Account.sharedInstance.me;
+    // Web: if we used fallback (myGroups non-empty but me.relayGroupsList empty), persist to me and DB
+    // so a later kind 10009 with empty list (older event) won't overwrite due to our newer lastRelayGroupsListUpdatedTime
+    if (kIsWeb && me != null && myGroups.isNotEmpty && (me.relayGroupsList == null || me.relayGroupsList!.isEmpty)) {
+      applyMyGroupListToMe();
+      await Account.sharedInstance.syncMe();
+      await DBISAR.sharedInstance.flushBuffers();
+    }
     _udpateGroupInfos();
     myGroupsUpdatedCallBack?.call();
   }
@@ -199,13 +207,15 @@ class RelayGroup {
       connectToRelays(groupRelays);
     }
 
-    // Fallback for web: if account list is empty but local groups contain current user, include them
+    // Fallback for web: if account list is empty but local groups contain current user (or user is author), include them
     if (kIsWeb && result.isEmpty && groups.isNotEmpty) {
       final currentPubkey = me?.pubKey ?? Account.sharedInstance.currentPubkey;
       groups.forEach((groupId, notifier) {
         final g = notifier.value;
         final members = g.members ?? [];
-        if (currentPubkey.isNotEmpty && members.contains(currentPubkey)) {
+        final isMember = currentPubkey.isNotEmpty && members.contains(currentPubkey);
+        final isAuthor = currentPubkey.isNotEmpty && g.author == currentPubkey;
+        if (isMember || isAuthor) {
           result[groupId] = notifier;
         }
       });
@@ -481,11 +491,25 @@ class RelayGroup {
     await saveGroupToDB(groupDB);
   }
 
-  Future<void> _syncMyGroupListToDB() async {
+  /// Update me.relayGroupsList from current myGroups (sync only). Call right after mutating myGroups so kind 10009 cannot overwrite during later await.
+  void applyMyGroupListToMe() {
     UserDBISAR? me = Account.sharedInstance.me;
-    me!.relayGroupsList =
+    if (me == null) return;
+    me.relayGroupsList =
         myGroups.values.map((e) => '${e.value.relay}\'${e.value.groupId}').toList();
+    final now = currentUnixTimestampSeconds();
+    me.lastRelayGroupsListUpdatedTime = now;
+    me.lastUpdatedTime = now;
+  }
+
+  Future<void> syncMyGroupListToDB() async {
+    applyMyGroupListToMe();
+    UserDBISAR? me = Account.sharedInstance.me;
+    if (me == null) return;
     await Account.sharedInstance.syncMe();
+    if (kIsWeb) {
+      await DBISAR.sharedInstance.flushBuffers();
+    }
     groupListUpdated();
   }
 
@@ -499,7 +523,7 @@ class RelayGroup {
     Connect.sharedInstance.sendEvent(event, sendCallBack: (ok, relay) {
       if (ok.status) {
         Account.sharedInstance.me!.lastGroupsListUpdatedTime = event.createdAt;
-        _syncMyGroupListToDB();
+        syncMyGroupListToDB();
       }
       if (!completer.isCompleted) completer.complete(ok);
     });

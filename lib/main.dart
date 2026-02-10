@@ -1,8 +1,8 @@
-
 import 'dart:async';
 
 import 'package:chuchu/presentation/splash/splash_page.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:app_links/app_links.dart';
 import 'package:nostr_core_dart/src/nips/nip_019.dart';
 
@@ -10,6 +10,8 @@ import 'core/manager/chuchu_user_info_manager.dart';
 import 'core/manager/thread_pool_manager.dart';
 import 'core/utils/initialization_manager.dart';
 import 'core/utils/navigator/navigator.dart';
+import 'core/utils/web_loading_stub.dart'
+    if (dart.library.html) 'core/utils/web_loading_web.dart' as web_loading;
 import 'core/theme/app_theme.dart';
 import 'core/widgets/chuchu_Loading.dart';
 import 'core/config/config.dart' as AppConfig;
@@ -23,14 +25,29 @@ import 'package:google_fonts/google_fonts.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   GoogleFonts.config.allowRuntimeFetching = false;
-  
+
+  if (kIsWeb) {
+    // Web: show UI first to avoid white screen; run init in background.
+    unawaited(_runInit());
+    runApp(MainApp());
+  } else {
+    try {
+      await InitializationManager.instance.initialize();
+    } catch (error) {
+      debugPrint(
+          'The application initialization failed, but it continued to start: $error');
+    }
+    runApp(MainApp());
+  }
+}
+
+Future<void> _runInit() async {
   try {
     await InitializationManager.instance.initialize();
   } catch (error) {
-    debugPrint('The application initialization failed, but it continued to start: $error');
+    debugPrint(
+        'The application initialization failed, but it continued to start: $error');
   }
-  
-  runApp(MainApp());
 }
 
 class MainApp extends StatefulWidget {
@@ -53,6 +70,11 @@ class MainState extends State<MainApp> with WidgetsBindingObserver {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _initDeepLinkListener();
+    if (kIsWeb) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        web_loading.hideWebLoading();
+      });
+    }
   }
 
   // Initialize deep link listener
