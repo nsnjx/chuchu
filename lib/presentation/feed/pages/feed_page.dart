@@ -148,9 +148,14 @@ class _FeedPageState extends State<FeedPage>
   }
 
   void _loadSubscriptionList() {
-    myGroupsList = RelayGroup.sharedInstance.myGroups;
+    final newGroups = RelayGroup.sharedInstance.myGroups;
+    // Skip resorting and rebuilding when groups map did not actually change
+    if (mapEquals(myGroupsList, newGroups)) {
+      return;
+    }
+    myGroupsList = newGroups;
     _sortMyGroupsList();
-    if(mounted){
+    if (mounted) {
       setState(() {});
     }
   }

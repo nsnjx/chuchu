@@ -537,7 +537,6 @@ class Connect {
       eventCheckerFutures[event.subscriptionId! + relay] ??= [];
       eventCheckerFutures[event.subscriptionId! + relay]?.add(future);
     }
-    print('===>>>');
   }
 
   Future<void> _handleEOSE(String eose, String relay, bool timeout) async {
