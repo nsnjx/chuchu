@@ -457,13 +457,20 @@ class _FeedPageState extends State<FeedPage>
   }
 
   Widget _buildTopStoriesSection() {
+    final List<ValueNotifier<RelayGroupDBISAR>> groups =
+        myGroupsList.values.toList();
+
     final storiesContent = RepaintBoundary(
       child: ListView.builder(
         controller: storiesScrollController,
         scrollDirection: Axis.horizontal,
         padding: EdgeInsets.only(left: 16, right: 16, top: _topPadding, bottom: _bottomPadding),
-        itemCount: myGroupsList.length + 1,
-        itemBuilder: _buildStoryItemBuilder,
+        itemCount: groups.length + 1,
+        itemBuilder: (context, index) => _buildStoryItemBuilder(
+          context,
+          index,
+          groups,
+        ),
       ),
     );
 
@@ -500,15 +507,22 @@ class _FeedPageState extends State<FeedPage>
     );
   }
 
-  Widget _buildStoryItemBuilder(BuildContext context, int index) {
-    if(index == myGroupsList.length) {
+  Widget _buildStoryItemBuilder(
+    BuildContext context,
+    int index,
+    List<ValueNotifier<RelayGroupDBISAR>> groups,
+  ) {
+    if (index == groups.length) {
       return _buildAddStoryItem();
     }
-    return _buildMyGroupStoryItem(index);
+    return _buildMyGroupStoryItem(index, groups);
   }
 
-  Widget _buildMyGroupStoryItem(int userIndex) {
-    RelayGroupDBISAR relayGroupDB = myGroupsList.values.toList()[userIndex].value;
+  Widget _buildMyGroupStoryItem(
+    int userIndex,
+    List<ValueNotifier<RelayGroupDBISAR>> groups,
+  ) {
+    final RelayGroupDBISAR relayGroupDB = groups[userIndex].value;
     bool hasNewNotes =  _notificationGroupNotes[relayGroupDB.groupId]?.isNotEmpty ?? false;
     final noteCount = _notificationGroupNotes[relayGroupDB.groupId]?.length ?? 0;
 

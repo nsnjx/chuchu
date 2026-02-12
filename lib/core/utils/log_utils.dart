@@ -1,3 +1,5 @@
+import 'package:flutter/foundation.dart' show kReleaseMode;
+
 typedef LogCreator = String Function();
 
 class LogUtils {
@@ -12,7 +14,9 @@ class LogUtils {
   static void e(LogCreator fn) => _print('E', fn);
 
   static void _print(String level, LogCreator fn) {
-    // Enable logs in production for debugging
+    if (kReleaseMode && (level == 'V' || level == 'D')) {
+      return;
+    }
     try {
       final message = fn.call();
       print('[$level] $message');
