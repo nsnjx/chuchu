@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:chuchu/presentation/splash/splash_page.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/services.dart';
 import 'package:app_links/app_links.dart';
 import 'package:nostr_core_dart/src/nips/nip_019.dart';
 
@@ -27,6 +28,7 @@ void main() async {
   GoogleFonts.config.allowRuntimeFetching = false;
 
   if (kIsWeb) {
+    _setupPathProviderWebShim();
     // Web: show UI first to avoid white screen; run init in background.
     unawaited(_runInit());
     runApp(MainApp());
@@ -39,6 +41,25 @@ void main() async {
     }
     runApp(MainApp());
   }
+}
+
+/// On Web, path_provider has no implementation and throws MissingPluginException.
+/// Register a shim that returns virtual paths so wallet and other features can run.
+void _setupPathProviderWebShim() {
+  const channel = MethodChannel('plugins.flutter.io/path_provider');
+  channel.setMethodCallHandler((MethodCall call) async {
+    // Return a virtual path; Web has no real filesystem, callers use this for in-memory or skip FS ops.
+    const virtualPath = '/web_app';
+    switch (call.method) {
+      case 'getApplicationSupportDirectory':
+      case 'getApplicationDocumentsDirectory':
+      case 'getTemporaryDirectory':
+      case 'getLibraryDirectory':
+        return virtualPath;
+      default:
+        return null;
+    }
+  });
 }
 
 Future<void> _runInit() async {
