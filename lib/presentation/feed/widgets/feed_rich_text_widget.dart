@@ -39,6 +39,10 @@ class _FeedRichTextWidgetState extends State<FeedRichTextWidget>
   final GlobalKey _containerKey = GlobalKey();
 
   Map<String, UserDBISAR?> userDBList = {};
+  String? _cachedInputText;
+  FeedContentAnalyzeUtils? _cachedInputAnalyzer;
+  String? _cachedShowText;
+  FeedContentAnalyzeUtils? _cachedShowAnalyzer;
 
   bool isOnSelectText = false;
 
@@ -73,10 +77,17 @@ class _FeedRichTextWidgetState extends State<FeedRichTextWidget>
 
   @override
   Widget build(BuildContext context) {
-    String getShowText =
-        FeedContentAnalyzeUtils(widget.text).getMomentShowContent;
-    final textSpans = _buildTextSpans(getShowText, context);
-    if(getShowText.isEmpty) return const SizedBox();
+    if (widget.text != _cachedInputText) {
+      _cachedInputText = widget.text;
+      _cachedInputAnalyzer = FeedContentAnalyzeUtils(widget.text);
+    }
+    final getShowText = _cachedInputAnalyzer!.getMomentShowContent;
+    if (getShowText != _cachedShowText) {
+      _cachedShowText = getShowText;
+      _cachedShowAnalyzer = FeedContentAnalyzeUtils(getShowText);
+    }
+    final textSpans = _buildTextSpans(getShowText, context, _cachedShowAnalyzer);
+    if (getShowText.isEmpty) return const SizedBox();
     return Container(
       key: _containerKey,
       alignment: Alignment.centerLeft,
@@ -104,8 +115,8 @@ class _FeedRichTextWidgetState extends State<FeedRichTextWidget>
     );
   }
 
-  List<TextSpan> _buildTextSpans(String text, BuildContext context) {
-    FeedContentAnalyzeUtils analyze = FeedContentAnalyzeUtils(text);
+  List<TextSpan> _buildTextSpans(String text, BuildContext context, [FeedContentAnalyzeUtils? analyzer]) {
+    final analyze = analyzer ?? FeedContentAnalyzeUtils(text);
     String showContent = analyze.getMomentPlainText;
 
     if (!widget.isShowAllContent && showContent.length > 300) {

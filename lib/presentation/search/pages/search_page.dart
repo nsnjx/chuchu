@@ -15,6 +15,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../../core/account/account.dart';
 import '../../../core/account/account+profile.dart';
 import '../../../core/config/config.dart';
+import '../../../core/utils/log_utils.dart';
 import '../../../core/relayGroups/relayGroup.dart';
 import '../../../core/utils/navigator/navigator.dart';
 import '../../../core/utils/ui_refresh_mixin.dart';
@@ -630,7 +631,7 @@ class _SearchPageState extends State<SearchPage> with ChuChuUIRefreshMixin {
       String? pubkey;
       if (trimmedQuery.startsWith('npub1')) {
         if (!_isValidNpub1(trimmedQuery)) {
-          print('🔍Invalid npub1 format: $trimmedQuery');
+          LogUtils.d(() => 'Search: Invalid npub1 format: $trimmedQuery');
           setState(() {
             _isSearching = false;
             _searchResults = [];
@@ -638,11 +639,11 @@ class _SearchPageState extends State<SearchPage> with ChuChuUIRefreshMixin {
           return;
         }
         pubkey = UserDBISAR.decodePubkey(trimmedQuery);
-        print('🔍Valid npub1 format, decoded pubkey: $pubkey');
+        LogUtils.d(() => 'Search: Valid npub1, decoded pubkey: $pubkey');
       }
 
       if (pubkey == null || pubkey.isEmpty) {
-        print('🔍Failed to decode pubkey from: $trimmedQuery');
+        LogUtils.d(() => 'Search: Failed to decode pubkey from: $trimmedQuery');
         setState(() {
           _isSearching = false;
           _searchResults = [];
@@ -655,27 +656,16 @@ class _SearchPageState extends State<SearchPage> with ChuChuUIRefreshMixin {
             pubkey,
             Config.sharedInstance.recommendGroupRelays.first,
           );
-      print('🔍npub: $trimmedQuery');
-      print('🔍pubkey: $pubkey');
-      print('🔍relayGroup: $relayGroup');
-      print('🔍relayGroupId: ${relayGroup?.groupId}');
-      print('🔍name: ${relayGroup?.name}');
-      print('🔍subscriptionAmount: ${relayGroup?.subscriptionAmount}');
-
+      LogUtils.d(() => 'Search: npub=$trimmedQuery pubkey=$pubkey relayGroup=${relayGroup?.groupId} name=${relayGroup?.name}');
       if (relayGroup != null) {
         await _saveSearchHistory(relayGroup.groupId);
         Account.sharedInstance
             .reloadProfileFromRelay(pubkey)
             .then((updatedUser) {
-              print('🔍User Info (from relay):');
-              print('  - pubkey: ${updatedUser.pubKey}');
-              print('  - name: ${updatedUser.name}');
-              print('  - picture: ${updatedUser.picture ?? "null"}');
-              print('  - about: ${updatedUser.about ?? "null"}');
-              print('  - lastUpdatedTime: ${updatedUser.lastUpdatedTime}');
+              LogUtils.d(() => 'Search: User from relay pubkey=${updatedUser.pubKey} name=${updatedUser.name}');
             })
             .catchError((e) {
-              print('🔍Error reloading profile from relay: $e');
+              LogUtils.w(() => 'Search: Error reloading profile from relay: $e');
             });
       }
 
@@ -696,7 +686,7 @@ class _SearchPageState extends State<SearchPage> with ChuChuUIRefreshMixin {
           _searchResults = [];
         });
       }
-      debugPrint('Search failed: $e');
+      LogUtils.w(() => 'Search failed: $e');
     }
   }
 
@@ -708,7 +698,7 @@ class _SearchPageState extends State<SearchPage> with ChuChuUIRefreshMixin {
         _searchHistory = history;
       });
     } catch (e) {
-      debugPrint('Failed to load search history: $e');
+      LogUtils.w(() => 'Failed to load search history: $e');
     }
   }
 
@@ -729,7 +719,7 @@ class _SearchPageState extends State<SearchPage> with ChuChuUIRefreshMixin {
         _searchHistory = history;
       });
     } catch (e) {
-      debugPrint('Failed to save search history: $e');
+      LogUtils.w(() => 'Failed to save search history: $e');
     }
   }
 

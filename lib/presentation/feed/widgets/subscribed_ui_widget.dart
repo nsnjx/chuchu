@@ -9,6 +9,7 @@ import '../../../core/widgets/common_toast.dart';
 import '../../../core/account/account.dart';
 import '../../../core/config/config.dart';
 import '../../../core/relayGroups/relayGroup.dart';
+import '../../../core/utils/log_utils.dart';
 import '../../../core/relayGroups/relayGroup+info.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../drawerMenu/subscription/widgets/subscription_payment_dialog.dart';
@@ -636,7 +637,7 @@ class SubscribedOptionWidgetState extends State<SubscribedOptionWidget> {
         CommonToast.instance.show(context, errorMessage,toastType:ToastType.failed);
       }
     } catch (e) {
-      print('Error creating subscription invoice: $e');
+      LogUtils.w(() => 'SubscribedUI: Error creating subscription invoice: $e');
       CommonToast.instance.show(
         context,
         'Error creating subscription invoice: ${e.toString()}',
@@ -648,7 +649,7 @@ class SubscribedOptionWidgetState extends State<SubscribedOptionWidget> {
   /// Handle successful payment
   void _handlePaymentSuccess(String groupId, int months) async {
     try {
-      print('Payment successful for group $groupId, months: $months');
+      LogUtils.d(() => 'SubscribedUI: Payment successful groupId=$groupId months=$months');
 
       // Sync my groups from relays to get the latest data
       await _syncMyGroupsFromRelays();
@@ -661,7 +662,7 @@ class SubscribedOptionWidgetState extends State<SubscribedOptionWidget> {
 
       Navigator.pop(context);
     } catch (e) {
-      print('Error handling payment success: $e');
+      LogUtils.w(() => 'SubscribedUI: Error handling payment success: $e');
       CommonToast.instance.show(
         context,
         'Payment successful but failed to sync groups',
@@ -682,12 +683,12 @@ class SubscribedOptionWidgetState extends State<SubscribedOptionWidget> {
         // This method will automatically sync myGroups
         final groups = await RelayGroup.sharedInstance
             .searchMyGroupsMetadataFromRelays(relays, (groups) {
-              print('Synced ${groups.length} groups from relays');
+              LogUtils.d(() => 'SubscribedUI: Synced ${groups.length} groups from relays');
             });
-        print('Successfully synced ${groups.length} groups from relays');
+        LogUtils.d(() => 'SubscribedUI: Successfully synced ${groups.length} groups from relays');
       }
     } catch (e) {
-      print('Error syncing my groups from relays: $e');
+      LogUtils.w(() => 'SubscribedUI: Error syncing my groups from relays: $e');
       rethrow;
     }
   }

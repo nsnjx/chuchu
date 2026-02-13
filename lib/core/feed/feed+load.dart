@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart' show kDebugMode, kIsWeb, debugPrint;
 import 'package:isar/isar.dart' hide Filter;
 
 import '../account/account.dart';
+import '../utils/log_utils.dart';
 import '../account/model/zapRecordsDB_isar.dart';
 import '../account/zaps.dart';
 import '../contacts/contacts.dart';
@@ -1056,13 +1057,13 @@ extension Load on Feed {
       // ignore: avoid_print
       print('[Feed] handleNewNotes cached noteId=${noteDB.noteId} groupId=${noteDB.groupId}');
     }
-    debugPrint('[DB-Web] 🔵 handleNewNotes: noteId=${noteDB.noteId}, createAt=${noteDB.createAt}, latestNoteTime=$latestNoteTime');
+    LogUtils.d(() => '[DB-Web] handleNewNotes: noteId=${noteDB.noteId}, createAt=${noteDB.createAt}, latestNoteTime=$latestNoteTime');
     if (noteDB.createAt > latestNoteTime) {
       newNotes.add(noteDB);
-      debugPrint('[DB-Web] 🔵 handleNewNotes: Added to newNotes, count=${newNotes.length}, callback=${newNotesCallBack != null}');
+      LogUtils.d(() => '[DB-Web] handleNewNotes: Added to newNotes, count=${newNotes.length}, callback=${newNotesCallBack != null}');
       newNotesCallBack?.call(newNotes);
     } else {
-      debugPrint('[DB-Web] ⚠️ handleNewNotes: Note createAt (${noteDB.createAt}) <= latestNoteTime ($latestNoteTime), not adding to newNotes');
+      LogUtils.d(() => '[DB-Web] handleNewNotes: Note createAt (${noteDB.createAt}) <= latestNoteTime ($latestNoteTime), not adding');
     }
     // Check if this note mentions the current user (notification condition)
     bool hasPTag = noteDB.pTags?.contains(pubkey) == true;

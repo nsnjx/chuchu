@@ -13,6 +13,7 @@ import '../../../core/relayGroups/model/relayGroupDB_isar.dart';
 import '../../../core/relayGroups/relayGroup.dart';
 import '../../../core/services/blossom_uploader.dart';
 import '../../../core/utils/feed_widgets_utils.dart';
+import '../../../core/utils/log_utils.dart';
 import '../../../core/widgets/common_toast.dart';
 import '../../../core/widgets/chuchu_cached_network_Image.dart';
 import '../../../core/widgets/common_edit_field_dialog.dart';
@@ -980,8 +981,8 @@ class _ProfileEditPageState extends State<ProfileEditPage>
         });
       }
     } catch (e, stackTrace) {
-      debugPrint('Error picking cover photo: $e');
-      debugPrint('Stack trace: $stackTrace');
+      LogUtils.w(() => 'Error picking cover photo: $e');
+      LogUtils.d(() => 'Stack trace: $stackTrace');
       FeedWidgetsUtils.showMessage(
         context,
         'Unable to open photo picker. Please try again.',
@@ -1021,11 +1022,11 @@ class _ProfileEditPageState extends State<ProfileEditPage>
         uploadFilePath,
         fileName: fileName,
       );
-      print('🖼️ [_uploadCoverPhoto] Upload result: $imageUrl');
+      LogUtils.d(() => 'ProfileEdit: upload result: $imageUrl');
       if (imageUrl != null && mounted) {
         // Save uploaded URL separately, keep local path for display
         _uploadedCoverPhotoUrl = imageUrl;
-        print('🖼️ [_uploadCoverPhoto] Saved uploaded URL: $_uploadedCoverPhotoUrl');
+        LogUtils.d(() => 'ProfileEdit: saved uploaded URL: $_uploadedCoverPhotoUrl');
         _hasChangesNotifier.value = _hasChanges();
         setState(() {});
         CommonToast.instance.show(context, 'Cover photo uploaded successfully. Please confirm to save.',toastType:ToastType.success);
@@ -1033,8 +1034,8 @@ class _ProfileEditPageState extends State<ProfileEditPage>
         throw Exception('Upload returned empty URL');
       }
     } catch (e, stackTrace) {
-      debugPrint('Error uploading cover photo: $e');
-      debugPrint('Stack trace: $stackTrace');
+      LogUtils.w(() => 'Error uploading cover photo: $e');
+      LogUtils.d(() => 'Stack trace: $stackTrace');
       if (mounted) {
         CommonToast.instance.show(context, 'Cover photo upload failed: $e',      toastType:ToastType.failed);
       }
@@ -1057,20 +1058,14 @@ class _ProfileEditPageState extends State<ProfileEditPage>
         RelayGroup.sharedInstance.groups[widget.relayGroup.groupId]?.value ??
         widget.relayGroup;
 
-    print('🖼️ [_submitGroupMetadata] Starting metadata update');
-    print('🖼️ [_submitGroupMetadata] GroupId: ${relayGroup.groupId}');
-    print('🖼️ [_submitGroupMetadata] Current picture: ${relayGroup.picture}');
-    print('🖼️ [_submitGroupMetadata] Uploaded cover photo URL: $_uploadedCoverPhotoUrl');
-
+    LogUtils.d(() => 'ProfileEdit: submitGroupMetadata groupId=${relayGroup.groupId} picture=${relayGroup.picture} uploadedUrl=$_uploadedCoverPhotoUrl');
         final updatedName = _usernameController.text.trim();
         final updatedAbout = _aboutController.text.trim();
         final updatedPicture = _uploadedCoverPhotoUrl ?? relayGroup.picture;
     final updatedSubscriptionAmount =
         subscriptionAmountOverride ?? subscriptionPrice;
 
-    print('🖼️ [_submitGroupMetadata] Updated picture to send: $updatedPicture');
-    print('🖼️ [_submitGroupMetadata] Calling editMetadata...');
-
+    LogUtils.d(() => 'ProfileEdit: editMetadata picture=$updatedPicture');
         OKEvent event = await RelayGroup.sharedInstance.editMetadata(
           relayGroup.groupId,
           updatedName,
@@ -1083,8 +1078,7 @@ class _ProfileEditPageState extends State<ProfileEditPage>
           groupWalletId: relayGroup.groupWalletId,
         );
 
-    print('🖼️ [_submitGroupMetadata] editMetadata result: status=${event.status}, message=${event.message}');
-
+    LogUtils.d(() => 'ProfileEdit: editMetadata result status=${event.status} message=${event.message}');
         if (event.status) {
       // Sync local state so _hasChanges() returns correct value
       relayGroup.name = updatedName;
@@ -1092,9 +1086,9 @@ class _ProfileEditPageState extends State<ProfileEditPage>
       relayGroup.picture = updatedPicture;
       relayGroup.subscriptionAmount = updatedSubscriptionAmount;
       subscriptionPrice = updatedSubscriptionAmount;
-      print('🖼️ [_submitGroupMetadata] Local state synced. Picture: ${relayGroup.picture}');
+      LogUtils.d(() => 'ProfileEdit: local state synced picture=${relayGroup.picture}');
         } else {
-      print('🖼️ [_submitGroupMetadata] Failed to update metadata: ${event.message}');
+      LogUtils.w(() => 'ProfileEdit: failed to update metadata: ${event.message}');
     }
 
     return event;
@@ -1102,7 +1096,7 @@ class _ProfileEditPageState extends State<ProfileEditPage>
 
   /// Cancel cover photo upload - clear uploaded URL and reset state
   void _cancelCoverPhotoUpload() {
-    print('🖼️ [_cancelCoverPhotoUpload] Canceling cover photo upload');
+    LogUtils.d(() => 'ProfileEdit: cancel cover photo upload');
     setState(() {
       _uploadedCoverPhotoUrl = null;
       _selectedCoverPhotoPath = null;
@@ -1115,8 +1109,7 @@ class _ProfileEditPageState extends State<ProfileEditPage>
   /// Confirm cover photo upload - save to relay
   Future<void> _confirmCoverPhotoUpload() async {
     if (_uploadedCoverPhotoUrl == null) return;
-    
-    print('🖼️ [_confirmCoverPhotoUpload] Confirming cover photo upload');
+    LogUtils.d(() => 'ProfileEdit: confirm cover photo upload');
     setState(() {
       _isSavingCoverPhoto = true;
     });
@@ -1124,7 +1117,7 @@ class _ProfileEditPageState extends State<ProfileEditPage>
     try {
       OKEvent event = await _submitGroupMetadata(reason: 'Cover photo updated');
       if (event.status) {
-        print('🖼️ [_confirmCoverPhotoUpload] Cover photo saved to relay successfully');
+        LogUtils.d(() => 'ProfileEdit: cover photo saved to relay');
         getGroupInfo();
         setState(() {
           _isSavingCoverPhoto = false;
@@ -1139,7 +1132,7 @@ class _ProfileEditPageState extends State<ProfileEditPage>
           );
         }
       } else {
-        print('🖼️ [_confirmCoverPhotoUpload] Failed to save cover photo to relay: ${event.message}');
+        LogUtils.w(() => 'ProfileEdit: failed to save cover photo: ${event.message}');
         setState(() {
           _isSavingCoverPhoto = false;
         });
@@ -1152,7 +1145,7 @@ class _ProfileEditPageState extends State<ProfileEditPage>
         }
       }
     } catch (e) {
-      print('🖼️ [_confirmCoverPhotoUpload] Error saving cover photo to relay: $e');
+      LogUtils.w(() => 'ProfileEdit: error saving cover photo: $e');
       setState(() {
         _isSavingCoverPhoto = false;
       });

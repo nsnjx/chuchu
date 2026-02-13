@@ -802,18 +802,8 @@ class _FeedPageState extends State<FeedPage>
             : refreshController.loadComplete();
       }
 
-      if (_isInitialLoading) {
-        _isInitialLoading = false;
-      }
-
-      if (mounted) {
-        setState(() {
-          // Explicitly set loading to false in setState to ensure UI updates
-          if (_isInitialLoading) {
-            _isInitialLoading = false;
-          }
-        });
-      }
+      _isInitialLoading = false;
+      if (mounted) setState(() {});
     });
   }
 

@@ -11,6 +11,7 @@ import '../../core/widgets/common_image.dart';
 import '../../core/widgets/common_toast.dart';
 import '../../core/wallet/wallet.dart';
 import '../../core/wallet/model/wallet_transaction.dart';
+import '../../core/utils/log_utils.dart';
 import '../../core/utils/ui_refresh_mixin.dart';
 import 'transaction_detail_page.dart';
 import 'transactions_page.dart';
@@ -63,7 +64,7 @@ class _WalletPageState extends State<WalletPage> with ChuChuUIRefreshMixin {
     try {
       _allTransactions = await _wallet.getAllTransactions();
     } catch (e) {
-      print('Failed to update transactions: $e');
+      LogUtils.w(() => 'WalletPage: Failed to update transactions: $e');
     }
   }
 
@@ -79,7 +80,7 @@ class _WalletPageState extends State<WalletPage> with ChuChuUIRefreshMixin {
           });
         }
       } catch (e) {
-        print('Failed to get USD value: $e');
+        LogUtils.w(() => 'WalletPage: Failed to get USD value: $e');
       }
     }
   }
@@ -93,7 +94,7 @@ class _WalletPageState extends State<WalletPage> with ChuChuUIRefreshMixin {
         setState(() {});
       }
     } catch (e) {
-      print('Failed to initialize wallet: $e');
+      LogUtils.w(() => 'WalletPage: Failed to initialize wallet: $e');
     }
   }
 
