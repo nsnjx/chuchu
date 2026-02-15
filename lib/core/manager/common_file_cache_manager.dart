@@ -4,9 +4,9 @@ import 'package:chuchu/core/utils/string_util.dart';
 import 'package:encrypt/encrypt.dart';
 import 'package:file/file.dart';
 import 'package:file/local.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 import 'package:path/path.dart' as path;
-
 
 import '../utils/aes_encrypt_utils.dart';
 
@@ -36,26 +36,37 @@ class ChuChuDefaultCacheManager extends CacheManager with ImageCacheManager {
     return _instance;
   }
 
-  ChuChuDefaultCacheManager._() : super(Config(key, repo: JsonCacheInfoRepository(databaseName: key)));
+  /// On Web, use NonStoringObjectProvider + MemoryCacheSystem to avoid dart:io (Directory/File).
+  ChuChuDefaultCacheManager._()
+      : super(Config(
+          key,
+          repo: kIsWeb ? NonStoringObjectProvider() : JsonCacheInfoRepository(databaseName: key),
+        ));
 }
 
 class DecryptedCacheManager extends CacheManager {
   static const key = "decryptCache";
-  static Config configManager = Config(
-    key,
-    repo: JsonCacheInfoRepository(databaseName: key),
-  );
-  static final decryptedStore = CacheManager(configManager).store;
-  static final decryptedWebHelper = CacheManager(configManager).webHelper;
+  static Config? _configInstance;
+  static Config get _config =>
+      _configInstance ??= Config(
+        key,
+        repo: kIsWeb ? NonStoringObjectProvider() : JsonCacheInfoRepository(databaseName: key),
+      );
+  static CacheManager? _cacheManagerInstance;
+  static CacheManager get _decryptedCacheManager =>
+      _cacheManagerInstance ??= CacheManager(_config);
+  static get decryptedStore => _decryptedCacheManager.store;
+  static get decryptedWebHelper => _decryptedCacheManager.webHelper;
 
   final String decryptKey;
   final String decryptNonce;
 
-  DecryptedCacheManager(this.decryptKey, this.decryptNonce) : super.custom(
-    configManager,
-    cacheStore: decryptedStore,
-    webHelper: decryptedWebHelper,
-  );
+  DecryptedCacheManager(this.decryptKey, this.decryptNonce)
+      : super.custom(
+          _config,
+          cacheStore: decryptedStore,
+          webHelper: decryptedWebHelper,
+        );
 
   @override
   Future<File> getSingleFile(String url, {
