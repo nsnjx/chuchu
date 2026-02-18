@@ -471,7 +471,9 @@ class _FeedPersonalPageState extends State<FeedPersonalPage>
       notesList.addAll(list);
     }
 
-    _allNotesFromDBLastTimestamp = showList.last.createAt;
+    if (showList.isNotEmpty) {
+      _allNotesFromDBLastTimestamp = showList.last.createAt;
+    }
 
     if (isInit) {
       _refreshController.refreshCompleted();

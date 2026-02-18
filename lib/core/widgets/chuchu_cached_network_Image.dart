@@ -147,15 +147,15 @@ extension ChuChuCachedImageProviderEx on CachedNetworkImageProvider {
     if (widthValid && width != null) {
       final int tempWidth = (width * pixelRatio).round();
       resizeWidth = tempWidth;
-      if (maxPixelWidth != null) {
-        widthFactor = maxPixelWidth / resizeWidth;
+      if (maxPixelWidth != null && tempWidth > 0) {
+        widthFactor = maxPixelWidth / tempWidth;
       }
     }
     if (heightValid && height != null && height != double.infinity) {
       final int tempHeight = (height * pixelRatio).round();
       resizeHeight = tempHeight;
-      if (maxPixelHeight != null) {
-        heightFactor = maxPixelHeight / resizeHeight;
+      if (maxPixelHeight != null && tempHeight > 0) {
+        heightFactor = maxPixelHeight / tempHeight;
       }
     }
 

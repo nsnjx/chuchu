@@ -48,8 +48,8 @@ class _FeedVideoWidgetState extends State<FeedVideoWidget> {
 
   @override
   void dispose() {
-    // Clean up temporary thumbnail file if needed
-    if (_thumbnailPath != null && _thumbnailPath!.contains('temp_')) {
+    // Clean up temporary thumbnail file if needed (desktop/mobile only; Web has no dart:io File)
+    if (!kIsWeb && _thumbnailPath != null && _thumbnailPath!.contains('temp_')) {
       try {
         File(_thumbnailPath!).delete();
       } catch (e) {

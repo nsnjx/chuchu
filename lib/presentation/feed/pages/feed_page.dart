@@ -688,17 +688,19 @@ class _FeedPageState extends State<FeedPage>
     if (_relayReadyListener != null) {
       RelayGroup.sharedInstance.isReady.removeListener(_relayReadyListener!);
     }
-    
+
     ChuChuUserInfoManager.sharedInstance.removeObserver(this);
     ChuChuFeedManager.sharedInstance.removeObserver(this);
 
     // Restore original callback if we saved it, otherwise clear it
-    // Note: We can't easily restore the original callback here since we don't store it
-    // But setting to null should be safe as other components can set their own callbacks
     RelayGroup.sharedInstance.myGroupsUpdatedCallBack = null;
 
     final scrollController = widget.scrollController ?? feedScrollController;
     scrollController.removeListener(_onScroll);
+    // Only dispose controllers we own (created in this State)
+    feedScrollController.dispose();
+    storiesScrollController.dispose();
+    refreshController.dispose();
 
     super.dispose();
   }
