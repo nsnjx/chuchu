@@ -4,7 +4,9 @@ import 'package:chuchu/core/widgets/common_image.dart';
 import 'package:chuchu/core/widgets/chuchu_Loading.dart';
 import 'package:chuchu/core/bookmark/bookmark_manager.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart' show GoogleFonts;
+import 'package:nostr_core_dart/src/nips/nip_019.dart';
 
 import '../../../core/config/config.dart';
 import '../../../core/feed/feed.dart';
@@ -96,23 +98,37 @@ class _FeedOptionWidgetState extends State<FeedOptionWidget> {
             flex: 1,
             child: Align(
               alignment: Alignment.centerRight,
-              child: ValueListenableBuilder<List<String>>(
-                valueListenable: BookmarkManager.sharedInstance.bookmarkedNoteIds,
-                builder: (context, bookmarkedIds, child) {
-                  final isBookmarked = widget.notedUIModel?.noteDB.noteId != null &&
-                      bookmarkedIds.contains(widget.notedUIModel!.noteDB.noteId);
-                  
-                  return GestureDetector(
-                    onTap: _onBookmarkTap,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  GestureDetector(
+                    onTap: _onCopyLinkTap,
                     child: Padding(
-                      padding: const EdgeInsets.only(left: 8.0),
+                      padding: const EdgeInsets.only(right: 8.0),
                       child: CommonImage(
-                        iconName: isBookmarked ? 'bookmarked_icon.png' : 'bookmark_icon.png',
+                        iconName: 'copy_icon.png',
                         size: 18,
                       ),
                     ),
-                  );
-                },
+                  ),
+                  ValueListenableBuilder<List<String>>(
+                    valueListenable: BookmarkManager.sharedInstance.bookmarkedNoteIds,
+                    builder: (context, bookmarkedIds, child) {
+                      final isBookmarked = widget.notedUIModel?.noteDB.noteId != null &&
+                          bookmarkedIds.contains(widget.notedUIModel!.noteDB.noteId);
+                      return GestureDetector(
+                        onTap: _onBookmarkTap,
+                        child: Padding(
+                          padding: const EdgeInsets.only(left: 8.0),
+                          child: CommonImage(
+                            iconName: isBookmarked ? 'bookmarked_icon.png' : 'bookmark_icon.png',
+                            size: 18,
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ],
               ),
             ),
           ),
@@ -219,6 +235,31 @@ class _FeedOptionWidgetState extends State<FeedOptionWidget> {
       CommonToast.instance.show(context, 'Like success tips',toastType:ToastType.success);
     }else{
       CommonToast.instance.show(context, 'Like fail tips',toastType:ToastType.failed);
+    }
+  }
+
+  Future<void> _onCopyLinkTap() async {
+    final noteId = widget.notedUIModel?.noteDB.noteId;
+    if (noteId == null || noteId.isEmpty || !mounted) return;
+    try {
+      final String encoded = Nip19.encodeNote(noteId);
+      final String textToCopy = encoded.isNotEmpty ? encoded : noteId;
+      await Clipboard.setData(ClipboardData(text: textToCopy));
+      if (mounted) {
+        CommonToast.instance.show(
+          context,
+          'Link copied',
+          toastType: ToastType.success,
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        CommonToast.instance.show(
+          context,
+          'Failed to copy',
+          toastType: ToastType.failed,
+        );
+      }
     }
   }
 

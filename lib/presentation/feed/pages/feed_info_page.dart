@@ -3,8 +3,10 @@ import 'package:chuchu/core/relayGroups/model/relayGroupDB_isar.dart';
 import 'package:chuchu/core/relayGroups/relayGroup+note.dart';
 import 'package:chuchu/core/utils/widget_tool_utils.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:nostr_core_dart/src/nips/nip_019.dart';
 
 import '../../../core/account/account.dart';
 import '../../../core/account/model/userDB_isar.dart';
@@ -266,6 +268,31 @@ class _FeedInfoPageState extends State<FeedInfoPage>
     );
   }
 
+  Future<void> _copyNoteLink() async {
+    final noteId = _currentModel?.noteDB.noteId;
+    if (noteId == null || noteId.isEmpty || !mounted) return;
+    try {
+      final String encoded = Nip19.encodeNote(noteId);
+      final String textToCopy = encoded.isNotEmpty ? encoded : noteId;
+      await Clipboard.setData(ClipboardData(text: textToCopy));
+      if (mounted) {
+        CommonToast.instance.show(
+          context,
+          'Link copied',
+          toastType: ToastType.success,
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        CommonToast.instance.show(
+          context,
+          'Failed to copy',
+          toastType: ToastType.failed,
+        );
+      }
+    }
+  }
+
   void _updateNoteDB() async {
     if (_currentModel == null) return;
 
@@ -417,6 +444,13 @@ class _FeedInfoPageState extends State<FeedInfoPage>
           surfaceTintColor: Colors.transparent,
           elevation: 0,
           centerTitle: false,
+          actions: [
+            IconButton(
+              icon: CommonImage(iconName: 'copy_icon.png', size: 22),
+              onPressed: _copyNoteLink,
+              tooltip: 'Copy link',
+            ),
+          ],
         ),
         body: SizedBox(
           height: double.infinity,
