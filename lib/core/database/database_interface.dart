@@ -95,4 +95,10 @@ abstract class QueryBuilderInterface<T> {
 
   /// Combine queries (or)
   QueryBuilderInterface<T> or(QueryBuilderInterface<T> Function(QueryBuilderInterface<T>) builder);
+
+  /// Create a child builder (for use in or/anyOf). Same collection, empty conditions.
+  QueryBuilderInterface<T> createChildBuilder();
+
+  /// Add the child builder's conditions as one OR group. Child must be the same concrete builder type.
+  void addOrGroupFromChild(QueryBuilderInterface<T> child);
 }

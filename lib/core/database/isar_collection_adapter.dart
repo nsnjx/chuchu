@@ -371,10 +371,41 @@ class _IsarQueryBuilderWrapper<OBJ, R, S> implements QueryBuilder<OBJ, R, S> {
       return this;
     }
     
-    // Handle anyOf method
+    // Handle anyOf: anyOf(list, (q, item) => q.xxxEqualTo(item)). Pass a child adapter so q.xxxEqualTo works.
     if (cleanName == 'anyOf') {
-      // anyOf method implementation is complex, temporarily return this
-      // TODO: Implement complete anyOf logic
+      if (invocation.positionalArguments.length >= 2) {
+        final list = invocation.positionalArguments[0];
+        final callback = invocation.positionalArguments[1];
+        if (list is List && callback != null) {
+          final childBuilder = indexedDBQueryBuilder.createChildBuilder();
+          final childAdapter = _IsarQueryBuilderWrapper(
+            indexedDBQueryBuilder: childBuilder,
+            collection: collection,
+          );
+          for (var item in list) {
+            callback(childAdapter, item);
+          }
+          indexedDBQueryBuilder.addOrGroupFromChild(childBuilder);
+        }
+      }
+      return this;
+    }
+
+    if (cleanName == 'createChildBuilder') {
+      return _IsarQueryBuilderWrapper(
+        indexedDBQueryBuilder: indexedDBQueryBuilder.createChildBuilder(),
+        collection: collection,
+      );
+    }
+
+    if (cleanName == 'addOrGroupFromChild') {
+      if (invocation.positionalArguments.isNotEmpty) {
+        final child = invocation.positionalArguments[0];
+        final QueryBuilderInterface<OBJ> childBuilder = child is _IsarQueryBuilderWrapper
+            ? child.indexedDBQueryBuilder as QueryBuilderInterface<OBJ>
+            : child as QueryBuilderInterface<OBJ>;
+        indexedDBQueryBuilder.addOrGroupFromChild(childBuilder);
+      }
       return this;
     }
     
@@ -452,10 +483,21 @@ class IsarQueryBuilderAdapter<OBJ> implements QueryBuilder<OBJ, OBJ, dynamic> {
       return _indexedDBQueryBuilder.isNotEmpty(_camelToSnake(property));
     }
     
-    // Handle anyOf method
+    // Handle anyOf method: anyOf(list, (q, item) => q.xxxEqualTo(item)) -> OR of equalTo for each item
     if (name == 'anyOf') {
-      // anyOf method implementation is complex, temporarily return this
-      // TODO: Implement complete anyOf logic
+      final args = invocation.positionalArguments;
+      if (args.length >= 2) {
+        final list = args[0];
+        final callback = args[1];
+        if (list is List && callback != null) {
+          _indexedDBQueryBuilder.or((q) {
+            for (var item in list) {
+              callback(q, item);
+            }
+            return q;
+          });
+        }
+      }
       return this;
     }
     

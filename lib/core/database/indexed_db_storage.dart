@@ -853,6 +853,8 @@ class IndexedDBQueryBuilder<T> implements QueryBuilderInterface<T> {
   final dynamic _db;
   final String _collectionName;
   final List<QueryCondition> _conditions = [];
+  /// OR groups: each group is a list of conditions (ANDed within group); results from each group are unioned with main AND result.
+  final List<List<QueryCondition>> _orGroups = [];
   final IndexedDBCollection<T>? _collection; // Reference to collection for deserialization
 
   IndexedDBQueryBuilder(this._db, this._collectionName, [this._collection]);
@@ -867,13 +869,34 @@ class IndexedDBQueryBuilder<T> implements QueryBuilderInterface<T> {
       final allObjects = await _requestToFuture<List>(request);
 
       // Convert to List<Map<String, dynamic>>
-      // IndexedDB returns LinkedMap<dynamic, dynamic>, need to convert to Map<String, dynamic>
       final allMaps = allObjects.map((obj) => _convertToMapStringDynamic(obj)).toList();
-      
-      // Apply filter conditions
+
+      // Apply AND conditions first
       List<Map<String, dynamic>> filtered = allMaps;
       for (final condition in _conditions) {
         filtered = _applyCondition(filtered, condition);
+      }
+
+      // Union with each OR group: (main result) ∪ (data matching group1) ∪ (data matching group2) ...
+      if (_orGroups.isNotEmpty) {
+        final seenIds = <dynamic>{};
+        for (final map in filtered) {
+          final id = map['id'];
+          if (id != null) seenIds.add(id);
+        }
+        for (final group in _orGroups) {
+          List<Map<String, dynamic>> subset = allMaps;
+          for (final condition in group) {
+            subset = _applyCondition(subset, condition);
+          }
+          for (final map in subset) {
+            final id = map['id'];
+            if (id != null && !seenIds.contains(id)) {
+              seenIds.add(id);
+              filtered.add(map);
+            }
+          }
+        }
       }
 
       // Apply offset and limit
@@ -1037,14 +1060,30 @@ class IndexedDBQueryBuilder<T> implements QueryBuilderInterface<T> {
 
   @override
   QueryBuilderInterface<T> and(QueryBuilderInterface<T> Function(QueryBuilderInterface<T>) builder) {
-    // TODO: Implement and logic
+    final child = IndexedDBQueryBuilder<T>(_db, _collectionName, _collection);
+    builder(child);
+    _conditions.addAll(child._conditions);
     return this;
   }
 
   @override
   QueryBuilderInterface<T> or(QueryBuilderInterface<T> Function(QueryBuilderInterface<T>) builder) {
-    // TODO: Implement or logic
+    final child = createChildBuilder() as IndexedDBQueryBuilder<T>;
+    builder(child);
+    addOrGroupFromChild(child);
     return this;
+  }
+
+  @override
+  QueryBuilderInterface<T> createChildBuilder() {
+    return IndexedDBQueryBuilder<T>(_db, _collectionName, _collection);
+  }
+
+  @override
+  void addOrGroupFromChild(QueryBuilderInterface<T> child) {
+    if (child is IndexedDBQueryBuilder<T>) {
+      _orGroups.add(List<QueryCondition>.from(child._conditions));
+    }
   }
 
   /// Apply query conditions
