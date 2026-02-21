@@ -25,6 +25,10 @@ class Config {
     'wss://relay.chuchu.app',
   ];
 
+  /// First recommend group relay, or [wssHost] if list is empty (avoids StateError on .first).
+  String get recommendGroupRelayOrDefault =>
+      recommendGroupRelays.isNotEmpty ? recommendGroupRelays.first : wssHost;
+
   // default LNbits URL
   String defaultLnbitsUrl = 'https://lnbits.chuchu.app';
   // host config

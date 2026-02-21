@@ -39,7 +39,7 @@ class _SubscriptionSettingsPageState extends State<SubscriptionSettingsPage> {
   bool _isPaidSubscription = true;
   final Map<String, String> _customPrices = {};
 
-  String _subscriptionRelay = Config.sharedInstance.recommendGroupRelays.first;
+  String _subscriptionRelay = Config.sharedInstance.recommendGroupRelayOrDefault;
   
   final List<SubscriptionTier> _subscriptionTiers = [
     SubscriptionTier(

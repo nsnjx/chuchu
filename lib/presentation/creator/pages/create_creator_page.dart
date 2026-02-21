@@ -345,7 +345,7 @@ class CreateCreatorPageState extends State<CreateCreatorPage>
       // Create new subscription
       RelayGroupDBISAR? relayGroupDB = await RelayGroup.sharedInstance
           .createGroup(
-            Config.sharedInstance.recommendGroupRelays.first,
+            Config.sharedInstance.recommendGroupRelayOrDefault,
             Account.sharedInstance.currentPubkey,
             about: _aboutController.text,
             closed: _isPaidSubscription,

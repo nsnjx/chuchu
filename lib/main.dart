@@ -154,7 +154,7 @@ class MainState extends State<MainApp> with WidgetsBindingObserver {
       final relayGroup = await RelayGroup.sharedInstance
           .searchGroupsMetadataWithGroupID(
         pubkey,
-        AppConfig.Config.sharedInstance.recommendGroupRelays.first,
+        AppConfig.Config.sharedInstance.recommendGroupRelayOrDefault,
       );
 
       if (relayGroup == null) {

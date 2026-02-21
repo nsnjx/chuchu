@@ -654,7 +654,7 @@ class _SearchPageState extends State<SearchPage> with ChuChuUIRefreshMixin {
       RelayGroupDBISAR? relayGroup = await RelayGroup.sharedInstance
           .searchGroupsMetadataWithGroupID(
             pubkey,
-            Config.sharedInstance.recommendGroupRelays.first,
+            Config.sharedInstance.recommendGroupRelayOrDefault,
           );
       LogUtils.d(() => 'Search: npub=$trimmedQuery pubkey=$pubkey relayGroup=${relayGroup?.groupId} name=${relayGroup?.name}');
       if (relayGroup != null) {

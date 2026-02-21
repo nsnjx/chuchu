@@ -360,14 +360,13 @@ class _TransactionsPageState extends State<TransactionsPage>
 
   Widget _buildEmptyState() {
     final theme = Theme.of(context);
-    return Container(
-      width: double.infinity,
-      padding: EdgeInsets.only(top: 100),
+    return Center(
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.center,
+        mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          CommonImage(iconName: 'wallet_history_icon.png', width: 220),
-          SizedBox(height: 24),
+          const SizedBox(height: 100),
+          CommonImage(iconName: 'no_list_ill.png', width: 187),
+          const SizedBox(height: 20),
           Text(
             'No transactions yet',
             style: GoogleFonts.inter(
@@ -376,11 +375,11 @@ class _TransactionsPageState extends State<TransactionsPage>
               fontWeight: FontWeight.w600,
             ),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 8),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 40),
             child: Text(
-              'Your transaction history will appear here once you start using your wallet.',
+              'Your transaction history will appear here\nonce you start using your wallet.',
               style: GoogleFonts.inter(
                 color: theme.colorScheme.onSurfaceVariant,
                 fontSize: 16,

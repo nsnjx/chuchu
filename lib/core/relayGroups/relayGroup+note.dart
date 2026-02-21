@@ -250,10 +250,10 @@ extension ENote on RelayGroup {
       {int limit = 50, int? until}) async {
     // Fetch notes only from recommendGroupRelays (e.g. wss://relay.chuchu.app)
     final relayUrl = Config.sharedInstance.recommendGroupRelays.isNotEmpty
-        ? Config.sharedInstance.recommendGroupRelays.first
+        ? Config.sharedInstance.recommendGroupRelayOrDefault
         : group.relay.isNotEmpty
             ? group.relay
-            : 'wss://relay.chuchu.app';
+            : Config.sharedInstance.wssHost;
     final filter = Filter(
       h: [group.groupId],
       kinds: const [

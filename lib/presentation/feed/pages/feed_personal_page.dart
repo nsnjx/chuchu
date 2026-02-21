@@ -79,7 +79,7 @@ class _FeedPersonalPageState extends State<FeedPersonalPage>
       final remoteGroup = await RelayGroup.sharedInstance
           .getGroupMetadataFromRelay(
             widget.relayGroupDB.groupId,
-            relay: Config.sharedInstance.recommendGroupRelays.first,
+            relay: Config.sharedInstance.recommendGroupRelayOrDefault,
             author: widget.relayGroupDB.author,
           );
       if (remoteGroup != null) {

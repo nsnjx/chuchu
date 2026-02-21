@@ -78,7 +78,7 @@ class _ShareProfilePageState extends State<ShareProfilePage> {
         final relayGroup = await RelayGroup.sharedInstance
             .getGroupMetadataFromRelay(
           pubkey,
-          relay:  AppConfig.Config.sharedInstance.recommendGroupRelays.first,
+          relay:  AppConfig.Config.sharedInstance.recommendGroupRelayOrDefault,
           author: pubkey,
         );
         if (mounted) {
