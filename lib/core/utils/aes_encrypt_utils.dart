@@ -1,4 +1,4 @@
-import 'dart:io';
+import 'dart:io' if (dart.library.html) 'package:chuchu/core/account/platform_stub.dart';
 
 import 'package:encrypt/encrypt.dart';
 import 'dart:convert';

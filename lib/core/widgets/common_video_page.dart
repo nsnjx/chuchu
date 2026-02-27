@@ -1,5 +1,5 @@
 import 'dart:async';
-import 'dart:io';
+import 'dart:io' if (dart.library.html) 'package:chuchu/core/account/platform_stub.dart';
 
 import 'package:chewie/chewie.dart';
 import 'package:chuchu/core/utils/adapt.dart';

@@ -1,5 +1,5 @@
 import 'dart:async';
-import 'dart:io' as io;
+import 'dart:io' if (dart.library.html) 'package:chuchu/core/account/platform_stub.dart' as io;
 import 'package:chuchu/core/utils/string_util.dart';
 import 'package:encrypt/encrypt.dart';
 import 'package:file/file.dart';

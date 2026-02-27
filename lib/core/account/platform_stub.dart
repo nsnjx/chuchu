@@ -123,6 +123,15 @@ class X509Certificate {
   X509Certificate();
 }
 
+// Stub for WebSocket (dart:io; on web use app_web_socket_html instead)
+class WebSocket {
+  Stream<dynamic> get stream => throw UnsupportedError('WebSocket not available on web');
+  Future<void> get done => throw UnsupportedError('WebSocket not available on web');
+  void add(dynamic data) => throw UnsupportedError('WebSocket not available on web');
+  Future<void> close([int? code, String? reason]) async =>
+      throw UnsupportedError('WebSocket not available on web');
+}
+
 // Stub for exceptions
 class SocketException implements Exception {
   final String message;
