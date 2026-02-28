@@ -4,7 +4,10 @@ import 'dart:io' if (dart.library.html) 'package:chuchu/core/account/platform_st
 import 'package:chewie/chewie.dart';
 import 'package:chuchu/core/utils/adapt.dart';
 import 'package:chuchu/core/widgets/common_toast.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+
+import 'video_controller_from_path_io.dart' if (dart.library.html) 'video_controller_from_path_web.dart' as video_controller_factory;
 import 'package:flutter/services.dart';
 import 'package:video_player/video_player.dart';
 // import 'package:image_gallery_saver/image_gallery_saver.dart';
@@ -147,16 +150,15 @@ class _CommonVideoPageState extends State<CommonVideoPage> {
     try {
       if (RegExp(r'https?:\/\/').hasMatch(widget.videoUrl)) {
         final fileInfo = await ChuChuFileCacheManager.get().getFileFromCache(widget.videoUrl);
-        if (fileInfo != null) {
-          _videoPlayerController = VideoPlayerController.file(fileInfo.file);
+        if (fileInfo != null && !kIsWeb) {
+          _videoPlayerController = video_controller_factory.createVideoControllerFromPath(fileInfo.file.path);
           print('Video loaded from cache: ${fileInfo.file.path}');
         } else {
           _videoPlayerController = VideoPlayerController.networkUrl(Uri.parse(widget.videoUrl));
           _startCaching();
         }
       } else {
-        File videoFile = File(widget.videoUrl);
-        _videoPlayerController = VideoPlayerController.file(videoFile);
+        _videoPlayerController = video_controller_factory.createVideoControllerFromPath(widget.videoUrl);
       }
       
       await Future.wait([_videoPlayerController.initialize()]);
@@ -507,6 +509,11 @@ class _CustomControlsState extends State<CustomControls> {
           return;
         }
       } else {
+        if (kIsWeb) {
+          ChuChuLoading.dismiss();
+          _showToast('Saving local video is not supported on web');
+          return;
+        }
         final localFile = File(widget.videoUrl);
         if (await localFile.exists()) {
           videoPath = widget.videoUrl;

@@ -117,7 +117,7 @@ class DecryptedCacheManager extends CacheManager {
     final decryptedTempFile = await store.fileSystem.createFile(encryptFile.basename + '_temp');
 
     await decryptFile(
-      encryptFile,
+      io.File(encryptFile.path),
       decryptKey,
       decryptedFile: decryptedTempFile,
       nonce: decryptNonce,
@@ -162,7 +162,7 @@ class DecryptedCacheManager extends CacheManager {
     decryptedFile ??= await DecryptedCacheManager(decryptKey, nonce ?? '').store.fileSystem.createFile(fileName);
     await AesEncryptUtils.decryptFileInIsolate(
       file,
-      decryptedFile,
+      io.File(decryptedFile.path),
       decryptKey,
       nonce: nonce,
       mode: mode,

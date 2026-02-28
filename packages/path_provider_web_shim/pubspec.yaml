@@ -1,0 +1,20 @@
+name: path_provider_web_shim
+description: Web-only shim that implements path_provider channel so getApplicationSupportDirectory etc. do not throw on Flutter Web.
+version: 0.0.1
+publish_to: 'none'
+
+environment:
+  sdk: ^3.7.0
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_web_plugins:
+    sdk: flutter
+
+flutter:
+  plugin:
+    platforms:
+      web:
+        pluginClass: PathProviderWebShimPlugin
+        fileName: path_provider_web_shim_web.dart

@@ -49,6 +49,14 @@ class File {
   Future<dynamic> readAsBytes() async => _readBytes();
   dynamic readAsBytesSync() => _readBytes();
 
+  void writeAsBytesSync(List<int> bytes, {FileMode mode = FileMode.write}) {
+    throw UnsupportedError('File write operations not supported on web');
+  }
+
+  Future<File> writeAsBytes(List<int> bytes, {FileMode mode = FileMode.write}) async {
+    throw UnsupportedError('File write operations not supported on web');
+  }
+
   // Get file size in bytes
   Future<int> length() async {
     final data = web_file_registry.getWebFileData(path);

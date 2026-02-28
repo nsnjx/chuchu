@@ -1,11 +1,12 @@
 import 'dart:convert';
-import 'dart:io' if (dart.library.html) 'package:chuchu/core/account/platform_stub.dart';
 import 'dart:math';
 import 'dart:typed_data';
 
 import 'package:chuchu/core/utils/num_utils.dart';
 import 'package:chuchu/core/utils/string_util.dart';
 import 'package:flutter/material.dart';
+
+import 'local_image_provider_io.dart' if (dart.library.html) 'local_image_provider_web.dart' as local_image_provider;
 import 'package:crypto/crypto.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter_cache_manager/flutter_cache_manager.dart';
@@ -175,7 +176,7 @@ extension ChuChuCachedImageProviderEx on CachedNetworkImageProvider {
         cacheManager: cacheManager ?? ChuChuFileCacheManager.get(encryptKey: decryptedKey, encryptNonce: decryptedNonce),
       );
     } else {
-      provider = FileImage(File(uri));
+      provider = local_image_provider.createLocalFileImageProvider(uri);
     }
 
     return ResizeImage.resizeIfNeeded(
